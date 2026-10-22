@@ -19,6 +19,15 @@ local function lookup(_, k)
 end
 DataToColor.Env = setmetatable({}, { __index = lookup, __newindex = _G })
 
+-- The client builds some return values (e.g. C_Map.GetPlayerMapPosition ->
+-- Vector2DMixin) by looking the mixin up directly in the caller's environment,
+-- without __index. Copy Blizzard's mixins/metatables in so those lookups work.
+for k, v in pairs(_G) do
+  if type(k) == "string" and type(v) == "table" and (k:find("Mixin$") or k:find("Metatable$")) then
+    rawset(DataToColor.Env, k, v)
+  end
+end
+
 do
   local G = setmetatable({}, { __index = lookup, __newindex = compat })
   local C_Spell, C_SpellBook, C_UnitAuras = G.C_Spell, G.C_SpellBook, G.C_UnitAuras
