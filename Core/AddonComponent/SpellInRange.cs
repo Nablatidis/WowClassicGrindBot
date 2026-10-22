@@ -10,6 +10,8 @@ public sealed class SpellInRange : IReader
 
     private BitVector32 b;
 
+    public int Value => b.Data;
+
     public SpellInRange() { }
 
     public void Update(IAddonDataProvider reader)

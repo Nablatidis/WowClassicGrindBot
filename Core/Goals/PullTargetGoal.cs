@@ -225,7 +225,40 @@ public sealed class PullTargetGoal : GoapGoal, IGoapEventListener
         if (castAny || spellInQueue || playerReader.IsCasting() || (bits.AutoShot() && !playerReader.IsInMeleeRange()))
             return;
 
+        LogBlockedPullActions(keys);
+
         approachAction();
+    }
+
+    private int lastBlockedLogTargetGuid = -1;
+
+    // Explains (once per target) why no pull action could run, so the bot
+    // falls back to approaching. Helps diagnose unsupported clients.
+    private void LogBlockedPullActions(ReadOnlySpan<KeyAction> keys)
+    {
+        int targetGuid = playerReader.TargetGuid;
+        if (targetGuid == lastBlockedLogTargetGuid)
+            return;
+
+        lastBlockedLogTargetGuid = targetGuid;
+
+        for (int i = 0; i < keys.Length; i++)
+        {
+            KeyAction keyAction = keys[i];
+            if (keyAction.Name.Equals(input.Approach.Name, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            ReadOnlySpan<Requirement> requirements = keyAction.RequirementsRuntime;
+            System.Collections.Generic.List<string> failed = [];
+            for (int j = 0; j < requirements.Length; j++)
+            {
+                if (!requirements[j].HasRequirement())
+                    failed.Add(requirements[j].LogMessage());
+            }
+
+            if (failed.Count > 0)
+                Log($"{keyAction.Name} blocked by: {string.Join(", ", failed)}");
+        }
     }
 
     private void DefaultApproach()

@@ -85,6 +85,11 @@ public sealed partial class ApproachTargetGoal : GoapGoal, IGoapEventListener
 
         initialMinRange = playerReader.MinRange();
 
+        // Diagnostic: why the target is not considered within pull range
+        logger.LogInformation("Approach: range {Min}-{Max} yd, InMeleeRange={Melee}, WithinPullRange={Pull}, SpellInRange bits={Bits}",
+            playerReader.MinRange(), playerReader.MaxRange(), playerReader.IsInMeleeRange(),
+            playerReader.WithInPullRange(), playerReader.SpellInRange.Value);
+
         approachStart = GetTimestamp();
         SetNextStuckTimeCheck();
     }
