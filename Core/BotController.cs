@@ -416,11 +416,37 @@ public sealed partial class BotController : IBotController, IDisposable
         StatusChanged?.Invoke();
     }
 
+    private const int KEY_BINDINGS_WAIT_MS = 10_000;
+
+    // Keys are resolved from the in-game bindings when the profile loads. If the
+    // addon has not finished sending them yet, defaults without modifiers are used
+    // (e.g. Interact -> Home instead of Alt-Home) and never corrected, so wait a bit.
+    private void WaitForGameKeyBindings()
+    {
+        KeyBindingsReader? bindingsReader = serviceProvider.GetService<KeyBindingsReader>();
+        if (bindingsReader == null || bindingsReader.IsInitialized)
+            return;
+
+        logger.LogInformation("Waiting for in-game key bindings from the addon...");
+
+        long start = GetTimestamp();
+        while (!bindingsReader.IsInitialized &&
+            GetElapsedTime(start).TotalMilliseconds < KEY_BINDINGS_WAIT_MS)
+        {
+            Thread.Sleep(100);
+        }
+
+        if (!bindingsReader.IsInitialized)
+            logger.LogWarning("Key bindings not received within {Ms}ms - using default keys", KEY_BINDINGS_WAIT_MS);
+    }
+
     private bool InitialiseFromFile(string classFile, Dictionary<int, string> pathFiles)
     {
         long startTime = GetTimestamp();
         try
         {
+            WaitForGameKeyBindings();
+
             var tryLoadConfig = ReadClassConfiguration(classFile);
             tryLoadConfig.Initialise(serviceProvider, pathFiles);
 
