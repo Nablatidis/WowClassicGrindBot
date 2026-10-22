@@ -437,7 +437,9 @@ function DataToColor:areSpellsInRange()
     for i = 1, targetCount do
         local spellName = spellRangeNameCache[i]
         if spellName then
-            if IsSpellInRange(spellName, DataToColor.C.unitTarget) == 1 then
+            local r = IsSpellInRange(spellName, DataToColor.C.unitTarget)
+            -- classic returns 1/0, modern clients (WoW Forever) return true/false
+            if r == 1 or r == true then
                 inRange = inRange + (2 ^ (i - 1))
             end
         end
@@ -447,7 +449,8 @@ function DataToColor:areSpellsInRange()
         local data = DataToColor.S.spellInRangeUnit[i]
         local spellName = spellRangeUnitNameCache[i]
         local unit = data[2]
-        if spellName and IsSpellInRange(spellName, unit) == 1 then
+        local r = spellName and IsSpellInRange(spellName, unit)
+        if r == 1 or r == true then
             inRange = inRange + (2 ^ (targetCount + i - 1))
         end
     end
