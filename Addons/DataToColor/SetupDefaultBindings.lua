@@ -404,6 +404,12 @@ local UtilityActions = {
 -- Requires BindPad addon to be installed (provides the working secure button)
 local function SetupMacroButton()
   local btn = BindPadMacro
+  if not btn and CreateFrame then
+    -- BindPad not loaded (e.g. disabled on WoW Forever, where its UI is broken):
+    -- create the same named secure button ourselves so the bindings still work.
+    local ok, created = pcall(CreateFrame, "Button", "BindPadMacro", UIParent, "SecureActionButtonTemplate")
+    if ok then btn = created end
+  end
   if not btn then
     DataToColor:Print("ERROR: BindPadMacro not found! Install BindPad addon.")
     return false
