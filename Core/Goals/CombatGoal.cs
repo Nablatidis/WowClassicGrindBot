@@ -142,6 +142,7 @@ public sealed class CombatGoal : GoapGoal, IGoapEventListener
         }
 
         ReadOnlySpan<KeyAction> span = Keys;
+        bool castSpell = false;
         for (int i = 0; bits.Target_Alive() && i < span.Length; i++)
         {
             KeyAction keyAction = span[i];
@@ -155,9 +156,14 @@ public sealed class CombatGoal : GoapGoal, IGoapEventListener
 
             if (castingHandler.CastIfReady(keyAction, interrupt))
             {
+                castSpell = !keyAction.BaseAction;
                 break;
             }
         }
+
+        // Only base actions (Approach/AutoAttack) or nothing ran: explain why
+        if (!castSpell && bits.Target_Alive())
+            LogBlockedCombatActions(span);
 
         if (!bits.Target() || (bits.Target() && bits.Target_Dead()))
         {
@@ -181,6 +187,42 @@ public sealed class CombatGoal : GoapGoal, IGoapEventListener
             {
                 input.PressClearTarget();
                 wait.Update();
+            }
+        }
+    }
+
+    private long lastBlockedLog;
+    private const int BLOCKED_LOG_INTERVAL_MS = 2000;
+
+    // Diagnostic: periodically explain which requirements keep combat actions
+    // (non base actions) from running.
+    private void LogBlockedCombatActions(ReadOnlySpan<KeyAction> span)
+    {
+        long now = Environment.TickCount64;
+        if (now - lastBlockedLog < BLOCKED_LOG_INTERVAL_MS)
+            return;
+
+        lastBlockedLog = now;
+
+        for (int i = 0; i < span.Length; i++)
+        {
+            KeyAction keyAction = span[i];
+            if (keyAction.BaseAction)
+                continue;
+
+            ReadOnlySpan<Requirement> requirements = keyAction.RequirementsRuntime;
+            System.Collections.Generic.List<string> failed = [];
+            for (int j = 0; j < requirements.Length; j++)
+            {
+                if (!requirements[j].HasRequirement())
+                    failed.Add(requirements[j].LogMessage());
+            }
+
+            if (failed.Count > 0)
+            {
+                logger.LogInformation("{Name} blocked by: {Failed} | range {Min}-{Max} yd, power {Power}",
+                    keyAction.Name, string.Join(", ", failed),
+                    playerReader.MinRange(), playerReader.MaxRange(), playerReader.PTCurrent());
             }
         }
     }
