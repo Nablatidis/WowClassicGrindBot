@@ -829,6 +829,9 @@ function DataToColor:CreateFrames()
     local miniMapCache2 = 0
     local miniMapCacheTick = -999
 
+    -- Throttled caches below also refresh when globalTick went backwards
+    -- (flush resets it to 0), otherwise they froze until it caught up again.
+
     -- areSpellsInRange throttle (cell 40)
     local spellsInRangeCache = 0
     local spellsInRangeTick = -999
@@ -909,7 +912,7 @@ function DataToColor:CreateFrames()
                 Pixel(int, UnitPower(DataToColor.C.unitPlayer, PowerType.Mana), 15)
             end
 
-            if globalTick - miniMapCacheTick >= 200 then
+            if globalTick - miniMapCacheTick >= 200 or globalTick < miniMapCacheTick then
                 miniMapCache1 = DataToColor:MiniMapSettings1()
                 miniMapCache2 = DataToColor:MiniMapSettings2()
                 miniMapCacheTick = globalTick
@@ -1018,7 +1021,7 @@ function DataToColor:CreateFrames()
             Pixel(int, UnitHealthMax(DataToColor.C.unitPet), 38)
             Pixel(int, UnitHealth(DataToColor.C.unitPet), 39)
 
-            if globalTick - spellsInRangeTick >= 5 then
+            if globalTick - spellsInRangeTick >= 5 or globalTick < spellsInRangeTick then
                 spellsInRangeCache = DataToColor:areSpellsInRange()
                 spellsInRangeTick = globalTick
             end
@@ -1063,7 +1066,7 @@ function DataToColor:CreateFrames()
 
             Pixel(int, DataToColor:CastingInfoSpellId(DataToColor.C.unitTarget), 58) -- SpellId being cast by target
 
-            if globalTick - unitsTargetTick >= 5 then
+            if globalTick - unitsTargetTick >= 5 or globalTick < unitsTargetTick then
                 unitsTargetCache =
                     10 * DataToColor:UnitsTargetAsNumber(DataToColor.C.unitmouseover, DataToColor.C.unitmouseovertarget) +
                     DataToColor:UnitsTargetAsNumber(DataToColor.C.unitTarget, DataToColor.C.unitTargetTarget)
