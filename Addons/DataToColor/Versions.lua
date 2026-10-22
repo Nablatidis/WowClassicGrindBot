@@ -360,10 +360,19 @@ local Cata440 = DataToColor.IsClassic_Cata() and buildVersion >= 40400
 -- CLIENT VERSION ASSIGNMENT
 --------------------------------------------------------------------------------
 
+-- Project ids the bot understands (SharedLib/ClientVersion.cs)
+local KNOWN_PROJECT_IDS = { [1] = true, [2] = true, [5] = true, [11] = true, [14] = true, [19] = true }
+
+-- Fallback for custom clients that report an unknown WOW_PROJECT_ID
+-- (e.g. WoW Forever reports 18): pick the matching Classic flavour by build
+local PROJECT_ID_BY_EXPANSION = { [1] = 2, [2] = 5, [3] = 11, [4] = 14, [5] = 19 }
+
 if DataToColor.IsLegacy() then
   DataToColor.ClientVersion = 90 + math.floor(buildVersion / 10000)
-else
+elseif KNOWN_PROJECT_IDS[WOW_PROJECT_ID] then
   DataToColor.ClientVersion = WOW_PROJECT_ID
+else
+  DataToColor.ClientVersion = PROJECT_ID_BY_EXPANSION[math.floor(buildVersion / 10000)] or 2
 end
 
 --------------------------------------------------------------------------------
