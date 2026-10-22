@@ -396,6 +396,18 @@ end
 
 
 local offsetEnumPowerType = 2
+
+-- The bot uses the classic PowerType numbering (Happiness = 4, ComboPoints = 14).
+-- Modern clients (WoW Forever) renumbered it: ComboPoints = 4. Translate back so
+-- combo point costs are not read as pet Happiness.
+local CLASSIC_COMBO_POINTS = 14
+local clientComboPoints = Enum and Enum.PowerType and Enum.PowerType.ComboPoints
+local function ClassicPowerType(powerType)
+    if clientComboPoints and clientComboPoints ~= CLASSIC_COMBO_POINTS and powerType == clientComboPoints then
+        return CLASSIC_COMBO_POINTS
+    end
+    return powerType
+end
 function DataToColor:populateActionbarCost(slot)
     local actionType, id = GetActionInfo(slot)
     if actionType == DataToColor.C.ActionType.Macro then
@@ -410,7 +422,7 @@ function DataToColor:populateActionbarCost(slot)
             for order, costInfo in ipairs(costTable) do
                 -- cost negative means it produces that type of powertype...
                 if costInfo.cost > 0 then
-                    local meta = 100000 * slot + 10000 * order + costInfo.type + offsetEnumPowerType
+                    local meta = 100000 * slot + 10000 * order + ClassicPowerType(costInfo.type) + offsetEnumPowerType
                     --print(slot, actionType, order, costInfo.type, costInfo.cost, GetSpellLink(id), meta)
                     DataToColor.actionBarCostQueue:set(meta, costInfo.cost)
                     found = true
