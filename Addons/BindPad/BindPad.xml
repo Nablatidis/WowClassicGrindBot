@@ -318,7 +318,8 @@
                 </Anchors>
                 <Scripts>
                     <OnLoad>
-                        if self.Text then PanelTemplates_TabResize(self, -15) end
+                        if not self.Text then return end -- TabButtonTemplate missing on WoW Forever
+                        PanelTemplates_TabResize(self, -15)
                         _G[self:GetName().."HighlightTexture"]:SetWidth(self:GetTextWidth() + 31)
                     </OnLoad>
                     <OnClick>
@@ -342,9 +343,10 @@
                 </Anchors>
                 <Scripts>
                     <OnLoad>
+                        if not self.Text then return end -- TabButtonTemplate missing on WoW Forever
                         self:SetFormattedText(BINDPAD_TEXT_SPECIFIC_TAB, UnitName("player"))
                         _G[self:GetName().."HighlightTexture"]:SetWidth(self:GetTextWidth() + 31)
-                        if self.Text then PanelTemplates_TabResize(self, -15, nil, nil, 150) end
+                        PanelTemplates_TabResize(self, -15, nil, nil, 150)
                     </OnLoad>
                     <OnClick>
                         BindPadFrameTab_OnClick(self)
@@ -367,9 +369,10 @@
                 </Anchors>
                 <Scripts>
                     <OnLoad>
+                        if not self.Text then return end -- TabButtonTemplate missing on WoW Forever
                         self:SetText(BINDPAD_TEXT_SPECIFIC_EXTRA_TAB2)
                         _G[self:GetName().."HighlightTexture"]:SetWidth(self:GetTextWidth() + 31)
-                        if self.Text then PanelTemplates_TabResize(self, -15, nil, nil, 150) end
+                        PanelTemplates_TabResize(self, -15, nil, nil, 150)
                     </OnLoad>
                     <OnClick>
                         BindPadFrameTab_OnClick(self)
@@ -392,9 +395,10 @@
                 </Anchors>
                 <Scripts>
                     <OnLoad>
+                        if not self.Text then return end -- TabButtonTemplate missing on WoW Forever
                         self:SetText(BINDPAD_TEXT_SPECIFIC_EXTRA_TAB3)
                         _G[self:GetName().."HighlightTexture"]:SetWidth(self:GetTextWidth() + 31)
-                        if self.Text then PanelTemplates_TabResize(self, -15, nil, nil, 150) end
+                        PanelTemplates_TabResize(self, -15, nil, nil, 150)
                     </OnLoad>
                     <OnClick>
                         BindPadFrameTab_OnClick(self)
