@@ -409,6 +409,14 @@ local function SetupMacroButton()
     return false
   end
 
+  -- Modern clients fire binding clicks on key-down when ActionButtonUseKeyDown
+  -- is on, but secure buttons only listen to LeftButtonUp by default, so the
+  -- binding click was silently ignored. Listen to the one the client sends.
+  if btn.RegisterForClicks then
+    local keyDown = GetCVarBool and GetCVarBool("ActionButtonUseKeyDown")
+    btn:RegisterForClicks(keyDown and "AnyDown" or "AnyUp")
+  end
+
   -- Set wildcard type for all button clicks
   btn:SetAttribute("*type*", "macro")
 
