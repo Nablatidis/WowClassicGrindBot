@@ -315,7 +315,9 @@ public sealed class FrameConfigurator : IDisposable
                 }
                 else
                 {
-                    logger.LogError("Unable to identify ClientVersion UnitRace and UnitClass!");
+                    int raw = reader.Data.Length > 46 ? reader.GetInt(46) : -1;
+                    logger.LogError("Unable to identify ClientVersion UnitRace and UnitClass! Raw={Raw} -> Race={RaceId} Class={ClassId} ClientVersion={VersionId}",
+                        raw, (int)race, (int)@class, (int)clientVersion);
                     stage = Stage.Reset;
 
                     if (auto)
