@@ -1300,13 +1300,13 @@ function BindPadCore.ChatEdit_InsertLinkHook(text)
         end
     end
 end
-hooksecurefunc("ChatEdit_InsertLink", BindPadCore.ChatEdit_InsertLinkHook);
+if _G["ChatEdit_InsertLink"] then hooksecurefunc("ChatEdit_InsertLink", BindPadCore.ChatEdit_InsertLinkHook); end -- missing on modern clients (WoW Forever)
 
 function BindPadCore.PickupSpellBookItemHook(slot, bookType)
     BindPadCore.PickupSpellBookItem_slot = slot;
     BindPadCore.PickupSpellBookItem_bookType = bookType;
 end
-hooksecurefunc("PickupSpellBookItem", BindPadCore.PickupSpellBookItemHook);
+if _G["PickupSpellBookItem"] then hooksecurefunc("PickupSpellBookItem", BindPadCore.PickupSpellBookItemHook); end -- missing on modern clients (WoW Forever)
 
 function BindPadCore.InitBindPadOnce(event)
     if not BindPadCore.initialized then
@@ -1811,11 +1811,11 @@ function BindPadCore.GameTooltipSetAction(self, slot)
     BindPadCore.InsertBindingTooltip(BindPadCore.GetActionCommand(slot));
 end
 
-hooksecurefunc(GameTooltip, "SetItemByID", function(...) return BindPadCore.GameTooltipSetItemByID(...) end);
-hooksecurefunc(GameTooltip, "SetBagItem", function(...) return BindPadCore.GameTooltipSetBagItem(...) end);
-hooksecurefunc(GameTooltip, "SetSpellByID", function(...) return BindPadCore.GameTooltipSetSpellByID(...) end);
-hooksecurefunc(GameTooltip, "SetSpellBookItem", function(...) return BindPadCore.GameTooltipSetSpellBookItem(...) end);
-hooksecurefunc(GameTooltip, "SetAction", function(...) return BindPadCore.GameTooltipSetAction(...) end);
+if GameTooltip.SetItemByID then hooksecurefunc(GameTooltip, "SetItemByID", function(...) return BindPadCore.GameTooltipSetItemByID(...) end); end
+if GameTooltip.SetBagItem then hooksecurefunc(GameTooltip, "SetBagItem", function(...) return BindPadCore.GameTooltipSetBagItem(...) end); end
+if GameTooltip.SetSpellByID then hooksecurefunc(GameTooltip, "SetSpellByID", function(...) return BindPadCore.GameTooltipSetSpellByID(...) end); end
+if GameTooltip.SetSpellBookItem then hooksecurefunc(GameTooltip, "SetSpellBookItem", function(...) return BindPadCore.GameTooltipSetSpellBookItem(...) end); end
+if GameTooltip.SetAction then hooksecurefunc(GameTooltip, "SetAction", function(...) return BindPadCore.GameTooltipSetAction(...) end); end
 
 function BindPadCore.ShowDialog(text)
     BindPadCore.CancelDialogs();
