@@ -99,6 +99,26 @@ local ammoSlot = GetInventorySlotInfo("AmmoSlot")
 
 local spellRangeNameCache = {}
 local spellRangeUnitNameCache = {}
+local spellRangeIdCache = {}
+local spellRangeUnitIdCache = {}
+local spellRangePopulated = false
+
+-- Range check by spell id on modern clients (C_Spell.IsSpellInRange), which
+-- works on WoW Forever where the name-based classic path never reported in range.
+-- Accepts classic 1/0 and modern true/false results.
+local C_Spell_IsSpellInRange = C_Spell and C_Spell.IsSpellInRange
+local function SpellInRange(spellId, spellName, unit)
+    local r
+    if C_Spell_IsSpellInRange and spellId then
+        local ok, res = pcall(C_Spell_IsSpellInRange, spellId, unit)
+        if ok then r = res end
+    end
+    if r == nil and spellName and IsSpellInRange then
+        r = IsSpellInRange(spellName, unit)
+    end
+    if DataToColor.IsSecret(r) then return false end
+    return r == 1 or r == true
+end
 
 local cachedPetName = nil
 local petNameDirty = true
@@ -416,15 +436,18 @@ function DataToColor:PopulateSpellInRangeNames()
     for i = 1, #S.spellInRangeTarget do
         local spellIconId = S.spellInRangeTarget[i]
         local spellId = S.playerSpellBookIconToId[spellIconId] or spellIconId
+        spellRangeIdCache[i] = spellId
         spellRangeNameCache[i] = GetSpellInfo(spellId)
     end
     for i = 1, #S.spellInRangeUnit do
         local data = S.spellInRangeUnit[i]
         local spellId = S.playerSpellBookIconToId[data[1]]
         if spellId then
+            spellRangeUnitIdCache[i] = spellId
             spellRangeUnitNameCache[i] = GetSpellInfo(spellId)
         end
     end
+    spellRangePopulated = true
 end
 
 function DataToColor:InvalidatePetNameCache()
@@ -432,25 +455,22 @@ function DataToColor:InvalidatePetNameCache()
 end
 
 function DataToColor:areSpellsInRange()
+    if not spellRangePopulated then
+        DataToColor:PopulateSpellInRangeNames()
+    end
+
     local inRange = 0
     local targetCount = #DataToColor.S.spellInRangeTarget
     for i = 1, targetCount do
-        local spellName = spellRangeNameCache[i]
-        if spellName then
-            local r = IsSpellInRange(spellName, DataToColor.C.unitTarget)
-            -- classic returns 1/0, modern clients (WoW Forever) return true/false
-            if r == 1 or r == true then
-                inRange = inRange + (2 ^ (i - 1))
-            end
+        if SpellInRange(spellRangeIdCache[i], spellRangeNameCache[i], DataToColor.C.unitTarget) then
+            inRange = inRange + (2 ^ (i - 1))
         end
     end
 
     for i = 1, #DataToColor.S.spellInRangeUnit do
         local data = DataToColor.S.spellInRangeUnit[i]
-        local spellName = spellRangeUnitNameCache[i]
         local unit = data[2]
-        local r = spellName and IsSpellInRange(spellName, unit)
-        if r == 1 or r == true then
+        if SpellInRange(spellRangeUnitIdCache[i], spellRangeUnitNameCache[i], unit) then
             inRange = inRange + (2 ^ (targetCount + i - 1))
         end
     end
