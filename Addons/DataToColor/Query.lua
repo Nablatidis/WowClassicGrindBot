@@ -639,11 +639,14 @@ end
 
 function DataToColor:getMeleeAttackSpeed(unit)
     local main, off = UnitAttackSpeed(unit)
+    -- the game can hide these in combat (secret values): report 0 instead
+    main = DataToColor.Visible(main, 0)
+    off = DataToColor.Visible(off, 0)
     return 10000 * floor((off or 0) * 100) + floor((main or 0) * 100)
 end
 
 function DataToColor:getUnitRangedDamage(unit)
-    local speed = UnitRangedDamage(unit)
+    local speed = DataToColor.Visible(UnitRangedDamage(unit), 0)
     return floor((speed or 0) * 100)
 end
 
