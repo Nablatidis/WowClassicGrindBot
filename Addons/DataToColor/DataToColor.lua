@@ -789,8 +789,8 @@ function DataToColor:CreateFrames()
     end
 
     local function Pixel(func, value, slot)
-        -- Hidden (secret) values are not sent; the cell stays 0.
-        if IsSecret(value) then
+        -- Hidden (secret) or missing values are not sent; the cell stays 0.
+        if value == nil or IsSecret(value) then
             value = 0
         end
         if valueCache[slot] ~= value then
