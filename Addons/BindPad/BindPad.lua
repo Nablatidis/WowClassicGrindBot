@@ -12,6 +12,41 @@ local _, addon = ...
 
 local GetContainerItemID = GetContainerItemID or C_Container.GetContainerItemID
 
+-- Modern-engine fallbacks (WoW Forever): these classic globals moved into C_ namespaces.
+-- Local only, so nothing is written to _G.
+local GetItemInfo = GetItemInfo or (C_Item and C_Item.GetItemInfo)
+local GetSpellInfo = GetSpellInfo or function(spell)
+    local i = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spell)
+    if type(i) ~= "table" then return nil end
+    return i.name, nil, i.iconID, i.castTime, i.minRange, i.maxRange, i.spellID
+end
+local function spellBank(bookType)
+    local e = Enum and Enum.SpellBookSpellBank
+    if bookType == "pet" then return e and e.Pet or 1 end
+    return e and e.Player or 0
+end
+local GetSpellBookItemName = GetSpellBookItemName or function(index, bookType)
+    if not (C_SpellBook and C_SpellBook.GetSpellBookItemName) then return nil end
+    local ok, name, sub = pcall(C_SpellBook.GetSpellBookItemName, index, spellBank(bookType))
+    if ok then return name, sub end
+end
+local GetSpellBookItemInfo = GetSpellBookItemInfo or function(index, bookType)
+    if not (C_SpellBook and C_SpellBook.GetSpellBookItemInfo) then return nil end
+    local ok, info = pcall(C_SpellBook.GetSpellBookItemInfo, index, spellBank(bookType))
+    if ok and type(info) == "table" then
+        local t = Enum and Enum.SpellBookItemType
+        return (t and info.itemType == t.Spell) and "SPELL" or tostring(info.itemType), info.spellID or info.actionID
+    end
+end
+local GetSpellTabInfo = GetSpellTabInfo or function(index)
+    if not (C_SpellBook and C_SpellBook.GetSpellBookSkillLineInfo) then return nil end
+    local i = C_SpellBook.GetSpellBookSkillLineInfo(index)
+    if type(i) ~= "table" then return nil end
+    return i.name, i.iconID, i.itemIndexOffset, i.numSpellBookItems, i.isGuild, i.offSpecID
+end
+local PickupSpell = PickupSpell or (C_Spell and C_Spell.PickupSpell)
+local PickupItem = PickupItem or (C_Item and C_Item.PickupItem)
+
 local function concat(arg1, arg2)
     if arg1 and arg2 then
         return arg1..arg2;
