@@ -318,7 +318,7 @@
                 </Anchors>
                 <Scripts>
                     <OnLoad>
-                        PanelTemplates_TabResize(self, -15)
+                        if self.Text then PanelTemplates_TabResize(self, -15) end
                         _G[self:GetName().."HighlightTexture"]:SetWidth(self:GetTextWidth() + 31)
                     </OnLoad>
                     <OnClick>
@@ -344,7 +344,7 @@
                     <OnLoad>
                         self:SetFormattedText(BINDPAD_TEXT_SPECIFIC_TAB, UnitName("player"))
                         _G[self:GetName().."HighlightTexture"]:SetWidth(self:GetTextWidth() + 31)
-                        PanelTemplates_TabResize(self, -15, nil, nil, 150)
+                        if self.Text then PanelTemplates_TabResize(self, -15, nil, nil, 150) end
                     </OnLoad>
                     <OnClick>
                         BindPadFrameTab_OnClick(self)
@@ -369,7 +369,7 @@
                     <OnLoad>
                         self:SetText(BINDPAD_TEXT_SPECIFIC_EXTRA_TAB2)
                         _G[self:GetName().."HighlightTexture"]:SetWidth(self:GetTextWidth() + 31)
-                        PanelTemplates_TabResize(self, -15, nil, nil, 150)
+                        if self.Text then PanelTemplates_TabResize(self, -15, nil, nil, 150) end
                     </OnLoad>
                     <OnClick>
                         BindPadFrameTab_OnClick(self)
@@ -394,7 +394,7 @@
                     <OnLoad>
                         self:SetText(BINDPAD_TEXT_SPECIFIC_EXTRA_TAB3)
                         _G[self:GetName().."HighlightTexture"]:SetWidth(self:GetTextWidth() + 31)
-                        PanelTemplates_TabResize(self, -15, nil, nil, 150)
+                        if self.Text then PanelTemplates_TabResize(self, -15, nil, nil, 150) end
                     </OnLoad>
                     <OnClick>
                         BindPadFrameTab_OnClick(self)

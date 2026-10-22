@@ -170,7 +170,10 @@ function BindPadFrame_OnShow()
     end
 
     BindPadFrameTitleText:SetText(BINDPAD_TITLE);
-    PanelTemplates_SetTab(BindPadFrame, BindPadVars.tab);
+    -- tab template is missing on modern clients (WoW Forever): tabs have no .Text
+    if BindPadFrameTab1 and BindPadFrameTab1.Text then
+        PanelTemplates_SetTab(BindPadFrame, BindPadVars.tab);
+    end
 
     -- Update character button
     BindPadFrameCharacterButton:SetChecked(GetCurrentBindingSet() == 2);
