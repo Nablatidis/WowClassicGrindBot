@@ -20,6 +20,13 @@ public sealed class WowProcess
         "WowClassicB"
     ];
 
+    /// <summary>
+    /// Window class used by every World of Warcraft client, regardless of the executable name.
+    /// </summary>
+    public const string WindowClassName = "GxWindowClass";
+
+    public const string WindowTitle = "World of Warcraft";
+
     private readonly Thread thread;
     private readonly CancellationToken token;
 
@@ -102,14 +109,37 @@ public sealed class WowProcess
             Process p = processList[i];
             for (int j = 0; j < defaultProcessNames.Length; j++)
             {
-                if (defaultProcessNames[j].Contains(p.ProcessName, StringComparison.OrdinalIgnoreCase))
+                if (defaultProcessNames[j].Equals(p.ProcessName, StringComparison.OrdinalIgnoreCase))
                 {
                     return p;
                 }
             }
         }
 
-        return null;
+        // Unknown executable name (private servers, custom clients):
+        // locate the game by its window instead.
+        return GetByWindow(WindowClassName, null)
+            ?? GetByWindow(null, WindowTitle);
+    }
+
+    private static Process? GetByWindow(string? className, string? title)
+    {
+        nint hWnd = WinAPI.NativeMethods.FindWindow(className, title);
+        if (hWnd == nint.Zero)
+            return null;
+
+        WinAPI.NativeMethods.GetWindowThreadProcessId(hWnd, out uint pid);
+        if (pid == 0)
+            return null;
+
+        try
+        {
+            return Process.GetProcessById((int)pid);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 
     private (string path, Version version) GetProcessInfo()

@@ -87,6 +87,9 @@ public static partial class NativeMethods
     [LibraryImport("user32.dll")]
     public static partial uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
+    [LibraryImport("user32.dll", EntryPoint = "FindWindowW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint FindWindow(string? lpClassName, string? lpWindowName);
+
     /// <summary>
     /// Translates a character to a virtual-key code and shift state for the specified keyboard layout.
     /// Returns: Low byte = virtual key code, High byte = shift state (1=Shift, 2=Ctrl, 4=Alt)
