@@ -447,13 +447,13 @@ function DataToColor:PopulateSpellInRangeNames()
     local S = DataToColor.S
     for i = 1, #S.spellInRangeTarget do
         local spellIconId = S.spellInRangeTarget[i]
-        local spellId = S.playerSpellBookIconToId[spellIconId] or spellIconId
+        local spellId = S.playerSpellBookIconToId[spellIconId] or S.rangeIconFallbackId[spellIconId] or spellIconId
         spellRangeIdCache[i] = spellId
         spellRangeNameCache[i] = GetSpellInfo(spellId)
     end
     for i = 1, #S.spellInRangeUnit do
         local data = S.spellInRangeUnit[i]
-        local spellId = S.playerSpellBookIconToId[data[1]]
+        local spellId = S.playerSpellBookIconToId[data[1]] or S.rangeIconFallbackId[data[1]]
         if spellId then
             spellRangeUnitIdCache[i] = spellId
             spellRangeUnitNameCache[i] = GetSpellInfo(spellId)
