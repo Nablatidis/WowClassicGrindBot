@@ -37,12 +37,12 @@ local GetInventoryItemLink = GetInventoryItemLink
 local IsSpellInRange = IsSpellInRange
 local GetSpellInfo = GetSpellInfo
 local GetActionCooldown = GetActionCooldown
-local IsUsableItem = IsUsableItem or C_Item.IsUsableItem
+local IsUsableItem = IsUsableItem or (C_Item and C_Item.IsUsableItem)
 local IsUsableAction = IsUsableAction
 local IsCurrentAction = IsCurrentAction
 local IsAutoRepeatAction = IsAutoRepeatAction
 
-local IsUsableSpell = IsUsableSpell or C_Spell.IsUsableSpell
+local IsUsableSpell = IsUsableSpell or (C_Spell and C_Spell.IsSpellUsable)
 
 local GetNumSkillLines = GetNumSkillLines
 local GetSkillLineInfo = GetSkillLineInfo
@@ -72,18 +72,7 @@ local UnitIsDead = UnitIsDead
 local UnitIsPlayer = UnitIsPlayer
 local UnitName = UnitName
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
-local UnitCharacterPoints = UnitCharacterPoints or function(unit)
-  if not UnitExists(unit) then
-    return 0
-  end
-  if UnitIsUnit(unit, "pet") then
-    return GetUnspentTalentPoints(false, true)
-  elseif UnitIsUnit(unit, "player") then
-    return GetUnspentTalentPoints(false)
-  else
-    return 0
-  end
-end
+local UnitCharacterPoints = DataToColor.UnitCharacterPoints
 local UnitPlayerControlled = UnitPlayerControlled
 local GetShapeshiftForm = GetShapeshiftForm
 local GetShapeshiftFormInfo = GetShapeshiftFormInfo
@@ -154,13 +143,13 @@ function DataToColor:Bits1()
         (IsSwimming() and 2 or 0) ^ 11 +
         (DataToColor:PetHappy() and 2 or 0) ^ 12 +
         (DataToColor:HasAmmo() and 2 or 0) ^ 13 +
-        (UnitAffectingCombat(DataToColor.C.unitPlayer) and 2 or 0) ^ 14 +
+        (DataToColor.Visible(UnitAffectingCombat(DataToColor.C.unitPlayer), false) and 2 or 0) ^ 14 +
         (DataToColor:IsUnitsTargetIsPlayerOrPet(DataToColor.C.unitTarget, DataToColor.C.unitTargetTarget) and 2 or 0) ^ 15 +
-        (IsAutoRepeatSpell(DataToColor.C.Spell.AutoShotId) and 2 or 0) ^ 16 +
+        (DataToColor.Visible(IsAutoRepeatSpell(DataToColor.C.Spell.AutoShotId), false) and 2 or 0) ^ 16 +
         (UnitExists(DataToColor.C.unitTarget) and 2 or 0) ^ 17 +
         (IsMounted() and 2 or 0) ^ 18 +
-        (IsAutoRepeatSpell(DataToColor.C.Spell.ShootId) and 2 or 0) ^ 19 +
-        (IsCurrentSpell(DataToColor.C.Spell.AttackId) and 2 or 0) ^ 20 +
+        (DataToColor.Visible(IsAutoRepeatSpell(DataToColor.C.Spell.ShootId), false) and 2 or 0) ^ 19 +
+        (DataToColor.Visible(IsCurrentSpell(DataToColor.C.Spell.AttackId), false) and 2 or 0) ^ 20 +
         (UnitIsPlayer(DataToColor.C.unitTarget) and 2 or 0) ^ 21 +
         (DataToColor:UnitIsTapDenied(DataToColor.C.unitTarget) and 2 or 0) ^ 22 +
         (IsFalling() and 2 or 0) ^ 23
@@ -343,6 +332,10 @@ end
 
 function DataToColor:CastingInfoSpellId(unitId)
     local _, _, _, startTime, endTime, _, _, _, spellID = DataToColor.UnitCastingInfo(unitId)
+    local IsSecret = DataToColor.IsSecret
+    if IsSecret(spellID) or IsSecret(startTime) or IsSecret(endTime) then
+        return 0
+    end
 
     if spellID then
         if unitId == DataToColor.C.unitPlayer and startTime ~= DataToColor.lastCastStartTime then
@@ -354,6 +347,9 @@ function DataToColor:CastingInfoSpellId(unitId)
     end
 
     local _, _, _, startTime, endTime, _, _, spellID = DataToColor.UnitChannelInfo(unitId)
+    if IsSecret(spellID) or IsSecret(startTime) or IsSecret(endTime) then
+        return 0
+    end
     if spellID then
         if unitId == DataToColor.C.unitPlayer and startTime ~= DataToColor.lastCastStartTime then
             DataToColor.lastCastStartTime = startTime
@@ -470,6 +466,10 @@ function DataToColor:areSpellsInRange()
 end
 
 local function NormalizeUsable(usable, notEnough)
+  -- Hidden (secret) values count as not usable
+  if DataToColor.IsSecret(usable) or DataToColor.IsSecret(notEnough) then
+    return false, false
+  end
   -- Classic/vanilla style: usable = 1/nil, notEnough = 1/nil
   if usable == 1 then usable = true end
   if usable == nil then usable = false end
@@ -482,7 +482,7 @@ end
 
 local function GetActionSpellGcdMs(spellId)
   if not spellId then return 0 end
-  local base = select(2, GetSpellBaseCooldown(spellId))
+  local base = DataToColor.Visible(select(2, GetSpellBaseCooldown(spellId)), nil)
   return base or 1500 -- legacy fallback you already used
 end
 
@@ -491,6 +491,10 @@ function DataToColor:isActionUseable(min, max)
   local isUsableBits = 0
   for slot = min, max do
     local start, duration, enabled = GetActionCooldown(slot)
+    -- Hidden (secret) cooldowns: treat the slot as not ready and don't track it
+    if DataToColor.IsSecret(start) or DataToColor.IsSecret(duration) or DataToColor.IsSecret(enabled) then
+      start, duration, enabled = 1, 0, 0
+    end
 
     local actionType, id, _ = GetActionInfo(slot)
 
@@ -543,7 +547,7 @@ function DataToColor:isActionUseable(min, max)
       isUsableBits = isUsableBits + (2 ^ (slot - min))
     end
 
-    if enabled == 1 and start ~= 0 and (duration * 1000) > gcdMs and not DataToColor.actionBarCooldownQueue:exists(slot) then
+    if (enabled == 1 or enabled == true) and start ~= 0 and (duration * 1000) > gcdMs and not DataToColor.actionBarCooldownQueue:exists(slot) then
       DataToColor.actionBarCooldownQueue:set(slot, start + duration)
     end
   end

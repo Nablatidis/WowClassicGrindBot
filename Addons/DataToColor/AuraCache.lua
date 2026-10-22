@@ -11,6 +11,9 @@
 local Load = select(2, ...)
 local DataToColor = unpack(Load)
 
+local IsSecret = DataToColor.IsSecret
+local Visible = DataToColor.Visible
+
 -- Cache WoW API locally
 local UnitBuff = UnitBuff
 local UnitDebuff = UnitDebuff
@@ -111,16 +114,17 @@ local function RefreshBuffCache(unitId)
     -- Scan buffs (max 40)
     for i = 1, 40 do
         local name, texture, count, debuffType, duration, expirationTime = UnitBuff(unitId, i)
-        if not name then
+        -- Stop scanning when the game hides aura data (secret values)
+        if IsSecret(name) or not name then
             break
         end
 
         local entry = AcquireAuraEntry()
         entry.name = name
-        entry.texture = texture
-        entry.count = count or 0
-        entry.duration = duration or 0
-        entry.expirationTime = expirationTime or 0
+        entry.texture = Visible(texture, nil)
+        entry.count = Visible(count, 0) or 0
+        entry.duration = Visible(duration, 0) or 0
+        entry.expirationTime = Visible(expirationTime, 0) or 0
 
         cache.buffCount = cache.buffCount + 1
         cache.buffs[cache.buffCount] = entry
@@ -149,16 +153,17 @@ local function RefreshDebuffCache(unitId)
     -- Scan debuffs (max 40)
     for i = 1, 40 do
         local name, texture, count, debuffType, duration, expirationTime = UnitDebuff(unitId, i)
-        if not name then
+        -- Stop scanning when the game hides aura data (secret values)
+        if IsSecret(name) or not name then
             break
         end
 
         local entry = AcquireAuraEntry()
         entry.name = name
-        entry.texture = texture
-        entry.count = count or 0
-        entry.duration = duration or 0
-        entry.expirationTime = expirationTime or 0
+        entry.texture = Visible(texture, nil)
+        entry.count = Visible(count, 0) or 0
+        entry.duration = Visible(duration, 0) or 0
+        entry.expirationTime = Visible(expirationTime, 0) or 0
 
         cache.debuffCount = cache.debuffCount + 1
         cache.debuffs[cache.debuffCount] = entry

@@ -1,10 +1,297 @@
 local Load = select(2, ...)
 local DataToColor = unpack(Load)
 
+--------------------------------------------------------------------------------
+-- MODERN-ENGINE COMPAT (WoW Forever): restore classic globals the addon expects
+-- from the C_ namespaces. Only fills in functions that are missing (nil).
+--------------------------------------------------------------------------------
+do
+  local G = _G
+  local C_Spell, C_SpellBook, C_UnitAuras = G.C_Spell, G.C_SpellBook, G.C_UnitAuras
+
+  local function alias(name, ns, fname)
+    local t = G[ns]
+    if G[name] == nil and type(t) == "table" and t[fname or name] ~= nil then
+      G[name] = t[fname or name]
+    end
+  end
+
+  alias("IsAutoRepeatSpell", "C_Spell")
+  alias("IsCurrentSpell", "C_Spell")
+  alias("GetSpellPowerCost", "C_Spell")
+  alias("GetItemInfo", "C_Item")
+  alias("GetCoinTextureString", "C_CurrencyInfo")
+
+  if G.GetCoinTextureString == nil then
+    G.GetCoinTextureString = function(copper) return tostring(copper or 0) end
+  end
+
+  if G.GetSpellInfo == nil and C_Spell and C_Spell.GetSpellInfo then
+    local info = C_Spell.GetSpellInfo
+    G.GetSpellInfo = function(spell)
+      local i = info(spell)
+      if type(i) ~= "table" then return nil end
+      return i.name, nil, i.iconID, i.castTime, i.minRange, i.maxRange, i.spellID, i.originalIconID
+    end
+  end
+
+  -- classic returns 1 / 0 / nil, modern returns true / false / nil
+  if G.IsSpellInRange == nil and C_Spell and C_Spell.IsSpellInRange then
+    local inRange = C_Spell.IsSpellInRange
+    G.IsSpellInRange = function(spell, unit)
+      local r = inRange(spell, unit)
+      if DataToColor.IsSecret(r) then return nil end -- hidden by the game
+      if r == true then return 1 elseif r == false then return 0 end
+      return nil
+    end
+  end
+
+  -- spellbook: classic (index, "spell") -> modern (index, bank)
+  local function bank(bookType)
+    local e = G.Enum and G.Enum.SpellBookSpellBank
+    if bookType == "pet" then return e and e.Pet or 1 end
+    return e and e.Player or 0
+  end
+  if C_SpellBook then
+    if G.GetSpellBookItemName == nil and C_SpellBook.GetSpellBookItemName then
+      local f = C_SpellBook.GetSpellBookItemName
+      G.GetSpellBookItemName = function(index, bookType)
+        local ok, a, b, c = pcall(f, index, bank(bookType))
+        if ok then return a, b, c end
+        return nil
+      end
+    end
+    if G.GetSpellBookItemTexture == nil and C_SpellBook.GetSpellBookItemTexture then
+      local f = C_SpellBook.GetSpellBookItemTexture
+      G.GetSpellBookItemTexture = function(index, bookType)
+        local ok, a = pcall(f, index, bank(bookType))
+        if ok then return a end
+        return nil
+      end
+    end
+  end
+
+  -- auras: UnitBuff / UnitDebuff via C_UnitAuras
+  if C_UnitAuras then
+    local function unpackAura(a)
+      if type(a) ~= "table" then return nil end
+      return a.name, a.icon, a.applications, a.dispelName, a.duration, a.expirationTime,
+        a.sourceUnit, a.isStealable, a.nameplateShowPersonal, a.spellId
+    end
+    local function make(byIndex, filterName)
+      return function(unit, index, filter)
+        local a
+        if byIndex then
+          if filter then a = byIndex(unit, index, filter) else a = byIndex(unit, index) end
+        elseif C_UnitAuras.GetAuraDataByIndex then
+          a = C_UnitAuras.GetAuraDataByIndex(unit, index, filter and (filterName .. "|" .. filter) or filterName)
+        end
+        return unpackAura(a)
+      end
+    end
+    if G.UnitBuff == nil then G.UnitBuff = make(C_UnitAuras.GetBuffDataByIndex, "HELPFUL") end
+    if G.UnitDebuff == nil then G.UnitDebuff = make(C_UnitAuras.GetDebuffDataByIndex, "HARMFUL") end
+  end
+
+  -- spells / items moved into C_ namespaces
+  alias("IsUsableSpell", "C_Spell", "IsSpellUsable")
+  alias("IsUsableItem", "C_Item", "IsUsableItem")
+  alias("IsSpellKnown", "C_SpellBook", "IsSpellKnown")
+  alias("GetSpellBaseCooldown", "C_Spell", "GetSpellBaseCooldown")
+
+  -- action bar functions moved into C_ActionBar
+  alias("GetActionTexture", "C_ActionBar")
+  alias("GetActionInfo", "C_ActionBar")
+  alias("HasAction", "C_ActionBar")
+  alias("IsUsableAction", "C_ActionBar")
+  alias("IsCurrentAction", "C_ActionBar")
+  alias("IsAutoRepeatAction", "C_ActionBar")
+  if G.GetActionCooldown == nil and G.C_ActionBar and G.C_ActionBar.GetActionCooldown then
+    local f = G.C_ActionBar.GetActionCooldown
+    G.GetActionCooldown = function(slot)
+      local a, b, c, d = f(slot)
+      if type(a) == "table" then
+        return a.startTime, a.duration, a.isEnabled, a.modRate
+      end
+      return a, b, c, d
+    end
+  end
+
+  -- combo points: modern clients read them through UnitPower
+  if G.GetComboPoints == nil then
+    G.GetComboPoints = function(unit, target)
+      local e = G.Enum and G.Enum.PowerType
+      return G.UnitPower(unit or "player", e and e.ComboPoints or 4)
+    end
+  end
+
+  -- no equivalent in this client: safe empty answers so the addon keeps running
+  local function stub(name, fn) if G[name] == nil then G[name] = fn end end
+  stub("GetNumTalentTabs", function() return 0 end)
+  stub("GetNumTalents", function() return 0 end)
+  stub("GetTalentInfo", function() return nil end)
+  stub("GetNumSkillLines", function() return 0 end)
+  stub("GetSkillLineInfo", function() return nil end)
+  stub("GetPetHappiness", function() return nil end)
+  stub("GetRuneType", function() return nil end)
+  stub("GetSpellBaseCooldown", function() return nil end)
+end
+
+--------------------------------------------------------------------------------
+-- /dcapi : list game functions the addon uses that this client doesn't have
+--------------------------------------------------------------------------------
+local REQUIRED_API = {
+  "AcceptGroup",
+  "CanMerchantRepair",
+  "CheckInteractDistance",
+  "ClearSendMail",
+  "ClickSendMailItemButton",
+  "DeclineGroup",
+  "DeleteCursorItem",
+  "GetActionCooldown",
+  "GetActionInfo",
+  "GetActionTexture",
+  "GetAddOnCPUUsage",
+  "GetBindingKey",
+  "GetBuildInfo",
+  "GetCVarBool",
+  "GetCoinTextureString",
+  "GetComboPoints",
+  "GetCorpseRecoveryDelay",
+  "GetCurrentBindingSet",
+  "GetInventoryItemBroken",
+  "GetInventoryItemCount",
+  "GetInventoryItemDurability",
+  "GetInventoryItemID",
+  "GetInventoryItemLink",
+  "GetInventorySlotInfo",
+  "GetItemInfo",
+  "GetMacroInfo",
+  "GetMacroItem",
+  "GetMacroSpell",
+  "GetMerchantItemLink",
+  "GetMirrorTimerInfo",
+  "GetMoney",
+  "GetNetStats",
+  "GetNumLootItems",
+  "GetNumSkillLines",
+  "GetNumTalentTabs",
+  "GetNumTalents",
+  "GetPetActionInfo",
+  "GetPetHappiness",
+  "GetPlayerFacing",
+  "GetRepairAllCost",
+  "GetRuneCooldown",
+  "GetRuneType",
+  "GetSendMailItem",
+  "GetShapeshiftForm",
+  "GetShapeshiftFormInfo",
+  "GetSkillLineInfo",
+  "GetSpellBaseCooldown",
+  "GetSpellBookItemName",
+  "GetSpellBookItemTexture",
+  "GetSpellInfo",
+  "GetSpellPowerCost",
+  "GetTalentInfo",
+  "GetTime",
+  "GetUnitName",
+  "GetUnitSpeed",
+  "GetWeaponEnchantInfo",
+  "HasAction",
+  "HasPetUI",
+  "InCombatLockdown",
+  "IsAutoRepeatAction",
+  "IsAutoRepeatSpell",
+  "IsBagOpen",
+  "IsCurrentAction",
+  "IsCurrentSpell",
+  "IsFalling",
+  "IsFlying",
+  "IsInGroup",
+  "IsIndoors",
+  "IsMounted",
+  "IsSpellInRange",
+  "IsSpellKnown",
+  "IsStealthed",
+  "IsSwimming",
+  "IsUsableAction",
+  "IsUsableItem",
+  "IsUsableSpell",
+  "RepairAllItems",
+  "RepopMe",
+  "ResetCPUUsage",
+  "RetrieveCorpse",
+  "SaveBindings",
+  "SendMail",
+  "SetBinding",
+  "SetSendMailMoney",
+  "UnitAffectingCombat",
+  "UnitAttackSpeed",
+  "UnitBuff",
+  "UnitCastingInfo",
+  "UnitChannelInfo",
+  "UnitClass",
+  "UnitClassification",
+  "UnitDebuff",
+  "UnitExists",
+  "UnitGUID",
+  "UnitHealth",
+  "UnitHealthMax",
+  "UnitIsDead",
+  "UnitIsDeadOrGhost",
+  "UnitIsFriend",
+  "UnitIsGhost",
+  "UnitIsPlayer",
+  "UnitIsTapDenied",
+  "UnitIsTrivial",
+  "UnitIsUnit",
+  "UnitIsVisible",
+  "UnitLevel",
+  "UnitName",
+  "UnitOnTaxi",
+  "UnitPlayerControlled",
+  "UnitPower",
+  "UnitPowerMax",
+  "UnitRace",
+  "UnitRangedDamage",
+  "UnitReaction",
+  "UnitXP",
+  "UnitXPMax",
+  "UpdateAddOnCPUUsage",
+}
+
+function DataToColor:ReportMissingApi()
+  local missing = 0
+  for i = 1, #REQUIRED_API do
+    local name = REQUIRED_API[i]
+    if _G[name] == nil then
+      missing = missing + 1
+      DataToColor:Print("missing: " .. name)
+    end
+  end
+  DataToColor:Print("API check done, " .. missing .. " missing (of " .. #REQUIRED_API .. ")")
+end
+
 local GetBuildInfo = GetBuildInfo
 
 local UnitIsUnit = UnitIsUnit
 local UnitLevel = UnitLevel
+
+-- Unspent talent points, safe when the client lacks both UnitCharacterPoints and GetUnspentTalentPoints (e.g. WoW Forever)
+local NativeUnitCharacterPoints = UnitCharacterPoints
+function DataToColor.UnitCharacterPoints(unit)
+  if NativeUnitCharacterPoints then
+    return NativeUnitCharacterPoints(unit)
+  end
+  if GetUnspentTalentPoints and UnitExists(unit) then
+    if UnitIsUnit(unit, "pet") then
+      return GetUnspentTalentPoints(false, true) or 0
+    elseif UnitIsUnit(unit, "player") then
+      return GetUnspentTalentPoints(false) or 0
+    end
+  end
+  return 0
+end
 
 local UnitChannelInfo = UnitChannelInfo
 local UnitCastingInfo = UnitCastingInfo

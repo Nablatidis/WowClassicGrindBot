@@ -305,6 +305,10 @@ function DataToColor:UnfilteredCombatEvent(event, ...)
     if CombatLogGetCurrentEventInfo then
         return DataToColor:OnCombatEvent(CombatLogGetCurrentEventInfo())
     end
+    -- No combat log data in this client (e.g. WoW Forever): skip
+    if select('#', ...) == 0 then
+        return
+    end
     -- 4.3.4 and earlier
     return DataToColor:OnCombatEvent(...)
 end
@@ -973,11 +977,11 @@ end
 function DataToColor:OnUnitFlags_BitCache(event, unit)
     if not DataToColor.BitCache or not DataToColor.BitCache.bits1 then return end
     if unit == "target" then
-        DataToColor.BitCache.bits1.targetInCombat = UnitAffectingCombat(unit) or false
+        DataToColor.BitCache.bits1.targetInCombat = DataToColor.Visible(UnitAffectingCombat(unit), false) or false
     elseif unit == "focus" then
-        DataToColor.BitCache.bits2.focusInCombat = UnitAffectingCombat(unit) or false
+        DataToColor.BitCache.bits2.focusInCombat = DataToColor.Visible(UnitAffectingCombat(unit), false) or false
     elseif unit == "focustarget" then
-        DataToColor.BitCache.bits2.focusTargetInCombat = UnitAffectingCombat(unit) or false
+        DataToColor.BitCache.bits2.focusTargetInCombat = DataToColor.Visible(UnitAffectingCombat(unit), false) or false
     end
 end
 
@@ -989,20 +993,20 @@ end
 
 function DataToColor:OnPlayerAlive_BitCache(event)
     if DataToColor.BitCache and DataToColor.BitCache.bits1 then
-        DataToColor.BitCache.bits1.playerIsDeadOrGhost = UnitIsDeadOrGhost("player") or false
+        DataToColor.BitCache.bits1.playerIsDeadOrGhost = DataToColor.Visible(UnitIsDeadOrGhost("player"), false) or false
     end
 end
 
 function DataToColor:OnPlayerUnghost_BitCache(event)
     if DataToColor.BitCache and DataToColor.BitCache.bits1 then
-        DataToColor.BitCache.bits1.playerIsDeadOrGhost = UnitIsDeadOrGhost("player") or false
+        DataToColor.BitCache.bits1.playerIsDeadOrGhost = DataToColor.Visible(UnitIsDeadOrGhost("player"), false) or false
     end
 end
 
 function DataToColor:OnUnitHealth_BitCache(event, unit)
     if not DataToColor.BitCache or not DataToColor.BitCache.bits1 then return end
     if unit == "target" then
-        DataToColor.BitCache.bits1.targetIsDead = UnitIsDead(unit) or false
+        DataToColor.BitCache.bits1.targetIsDead = DataToColor.Visible(UnitIsDead(unit), false) or false
     elseif unit == "pet" then
         DataToColor.BitCache.updatePet()
     end
@@ -1052,7 +1056,7 @@ end
 
 function DataToColor:OnTalentChanged_BitCache(event)
     if DataToColor.BitCache and DataToColor.BitCache.bits1 then
-        DataToColor.BitCache.bits1.hasUnspentTalents = UnitCharacterPoints("player") > 0
+        DataToColor.BitCache.bits1.hasUnspentTalents = DataToColor.UnitCharacterPoints("player") > 0
     end
 end
 

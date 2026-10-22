@@ -48,6 +48,8 @@ end
 local Load = select(2, ...)
 local DataToColor = unpack(Load)
 
+local IsSecret = DataToColor.IsSecret
+
 local band = bit.band
 local rshift = bit.rshift
 local floor = math.floor
@@ -367,6 +369,7 @@ function DataToColor:RegisterSlashCommands()
     DataToColor:RegisterChatCommand('dcbindings', 'SetDefaultBindings')
     DataToColor:RegisterChatCommand('dcactions', 'CreateSecureButtons')
     DataToColor:RegisterChatCommand('dccache', 'ToggleBitCache')
+    DataToColor:RegisterChatCommand('dcapi', 'ReportMissingApi')
 end
 
 function DataToColor:ToggleBitCache()
@@ -711,7 +714,9 @@ function DataToColor:PopulateSpellBookInfo()
             if not name then break end
             id = id or (GetSpellID and GetSpellID(i, bookType))
             local texture = GetSpellBookItemTexture and GetSpellBookItemTexture(i, bookType)
-            RecordSpell(id, name, texture)
+            if not id or not IsSpellKnown or IsSpellKnown(id) then
+                RecordSpell(id, name, texture)
+            end
             i = i + 1
         end
 
@@ -783,6 +788,10 @@ function DataToColor:CreateFrames()
     end
 
     local function Pixel(func, value, slot)
+        -- Hidden (secret) values are not sent; the cell stays 0.
+        if IsSecret(value) then
+            value = 0
+        end
         if valueCache[slot] ~= value then
             valueCache[slot] = value
             local frame = frames[slot]
@@ -873,7 +882,7 @@ function DataToColor:CreateFrames()
 
                 for index = 1, 6 do
                     local startTime = GetRuneCooldown(index)
-                    if startTime == 0 then
+                    if not IsSecret(startTime) and startTime == 0 then
                         numRunes = numRunes + 1
                         local runeType = GetRuneType(index)
                         if runeType == 1 then
@@ -1031,7 +1040,7 @@ function DataToColor:CreateFrames()
             DataToColor.uiErrorMessage = 0
 
             Pixel(int, DataToColor:CastingInfoSpellId(DataToColor.C.unitPlayer), 53)                                                                                                                                                                               -- SpellId being cast
-            Pixel(int, DataToColor:getAvgEquipmentDurabilityCached() * 100 + ((DataToColor.C.CHARACTER_CLASS_ID == 2 and UnitPower(DataToColor.C.unitPlayer, PowerType.HolyPower) or GetComboPoints(DataToColor.C.unitPlayer, DataToColor.C.unitTarget)) or 0), 54)                                                                                                                                                                                                                                                -- for paladin holy power or combo points
+            Pixel(int, DataToColor:getAvgEquipmentDurabilityCached() * 100 + (DataToColor.Visible((DataToColor.C.CHARACTER_CLASS_ID == 2 and UnitPower(DataToColor.C.unitPlayer, PowerType.HolyPower) or GetComboPoints(DataToColor.C.unitPlayer, DataToColor.C.unitTarget)), 0) or 0), 54)                                                                                                                                                                                                                                                -- for paladin holy power or combo points
 
             local playerBuffCount = DataToColor:populateAuraTimer(UnitBuff, DataToColor.C.unitPlayer, DataToColor.playerBuffTime)
             local playerDebuffCount = DataToColor:populateAuraTimer(UnitDebuff, DataToColor.C.unitPlayer, DataToColor.playerDebuffTime)

@@ -19,7 +19,7 @@ local UnitExists = UnitExists
 local UnitIsVisible = UnitIsVisible
 local UnitIsPlayer = UnitIsPlayer
 local UnitPlayerControlled = UnitPlayerControlled
-local UnitCharacterPoints = UnitCharacterPoints
+local UnitCharacterPoints = DataToColor.UnitCharacterPoints
 local UnitOnTaxi = UnitOnTaxi
 local UnitReaction = UnitReaction
 local UnitIsFriend = UnitIsFriend
@@ -152,8 +152,8 @@ local function UpdateTargetCache()
     bits1Cache.targetExists = targetExists
 
     if targetExists then
-        bits1Cache.targetInCombat = UnitAffectingCombat(target) or false
-        bits1Cache.targetIsDead = UnitIsDead(target) or false
+        bits1Cache.targetInCombat = DataToColor.Visible(UnitAffectingCombat(target), false) or false
+        bits1Cache.targetIsDead = DataToColor.Visible(UnitIsDead(target), false) or false
         bits1Cache.targetIsHostile = IsUnitHostile(DataToColor.C.unitPlayer, target)
         bits1Cache.targetIsPlayer = UnitIsPlayer(target) or false
         bits1Cache.targetIsTapDenied = DataToColor:UnitIsTapDenied(target) or false
@@ -190,7 +190,7 @@ local function UpdateMouseoverCache()
     bits1Cache.mouseoverExists = exists
 
     if exists then
-        bits2Cache.mouseoverIsDead = UnitIsDead(mouseover) or false
+        bits2Cache.mouseoverIsDead = DataToColor.Visible(UnitIsDead(mouseover), false) or false
         bits2Cache.mouseoverIsTrivial = UnitIsTrivial(mouseover) or false
         bits2Cache.mouseoverIsTapDenied = DataToColor:UnitIsTapDenied(mouseover) or false
         bits2Cache.mouseoverIsHostile = IsUnitHostile(DataToColor.C.unitPlayer, mouseover)
@@ -219,11 +219,11 @@ local function UpdateFocusCache()
     bits2Cache.focusExists = UnitExists(focus) or false
 
     if bits2Cache.focusExists then
-        bits2Cache.focusInCombat = UnitAffectingCombat(focus) or false
+        bits2Cache.focusInCombat = DataToColor.Visible(UnitAffectingCombat(focus), false) or false
         bits2Cache.focusTargetExists = UnitExists(focusTarget) or false
 
         if bits2Cache.focusTargetExists then
-            bits2Cache.focusTargetInCombat = UnitAffectingCombat(focusTarget) or false
+            bits2Cache.focusTargetInCombat = DataToColor.Visible(UnitAffectingCombat(focusTarget), false) or false
             bits2Cache.focusTargetIsHostile = IsUnitHostile(DataToColor.C.unitPlayer, focusTarget)
         else
             bits2Cache.focusTargetInCombat = false
@@ -241,7 +241,7 @@ end
 local function UpdatePetCache()
     local pet = DataToColor.C.unitPet
     local petVisible = UnitIsVisible(pet)
-    local petDead = UnitIsDead(pet)
+    local petDead = DataToColor.Visible(UnitIsDead(pet), false)
 
     bits1Cache.petIsAlive = petVisible and not petDead
 
@@ -253,7 +253,7 @@ local function UpdatePetCache()
     end
 
     -- Pet target
-    bits2Cache.petTargetIsDead = UnitIsDead(DataToColor.C.unitPetTarget) or false
+    bits2Cache.petTargetIsDead = DataToColor.Visible(UnitIsDead(DataToColor.C.unitPetTarget), false) or false
 
     -- Pet defensive mode
     if HasPetUI() then
@@ -272,12 +272,12 @@ end
 
 -- Update player combat state
 local function UpdatePlayerCombatCache()
-    bits1Cache.playerInCombat = UnitAffectingCombat(DataToColor.C.unitPlayer) or false
+    bits1Cache.playerInCombat = DataToColor.Visible(UnitAffectingCombat(DataToColor.C.unitPlayer), false) or false
 end
 
 -- Update player death state
 local function UpdatePlayerDeathCache()
-    bits1Cache.playerIsDeadOrGhost = UnitIsDeadOrGhost(DataToColor.C.unitPlayer) or false
+    bits1Cache.playerIsDeadOrGhost = DataToColor.Visible(UnitIsDeadOrGhost(DataToColor.C.unitPlayer), false) or false
 end
 
 -- Update mount state
@@ -321,9 +321,9 @@ end
 
 -- Update auto-attack/spell states
 local function UpdateSpellStateCache()
-    bits1Cache.autoShotActive = IsAutoRepeatSpell(DataToColor.C.Spell.AutoShotId) or false
-    bits1Cache.shootActive = IsAutoRepeatSpell(DataToColor.C.Spell.ShootId) or false
-    bits1Cache.attackActive = IsCurrentSpell(DataToColor.C.Spell.AttackId) or false
+    bits1Cache.autoShotActive = DataToColor.Visible(IsAutoRepeatSpell(DataToColor.C.Spell.AutoShotId), false) or false
+    bits1Cache.shootActive = DataToColor.Visible(IsAutoRepeatSpell(DataToColor.C.Spell.ShootId), false) or false
+    bits1Cache.attackActive = DataToColor.Visible(IsCurrentSpell(DataToColor.C.Spell.AttackId), false) or false
 end
 
 -- Update breath/mirror timer
@@ -340,11 +340,11 @@ local function UpdateSoftInteractCache()
     bits3Cache.softInteractExists = exists
 
     if exists then
-        bits3Cache.softInteractIsDead = UnitIsDead(softInteract) or false
-        bits3Cache.softInteractIsDeadOrGhost = UnitIsDeadOrGhost(softInteract) or false
+        bits3Cache.softInteractIsDead = DataToColor.Visible(UnitIsDead(softInteract), false) or false
+        bits3Cache.softInteractIsDeadOrGhost = DataToColor.Visible(UnitIsDeadOrGhost(softInteract), false) or false
         bits3Cache.softInteractIsPlayer = UnitIsPlayer(softInteract) or false
         bits3Cache.softInteractIsTapDenied = DataToColor:UnitIsTapDenied(softInteract) or false
-        bits3Cache.softInteractInCombat = UnitAffectingCombat(softInteract) or false
+        bits3Cache.softInteractInCombat = DataToColor.Visible(UnitAffectingCombat(softInteract), false) or false
         bits3Cache.softInteractIsHostile = IsUnitHostile(DataToColor.C.unitPlayer, softInteract)
     else
         bits3Cache.softInteractIsDead = false

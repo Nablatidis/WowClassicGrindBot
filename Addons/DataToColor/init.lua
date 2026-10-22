@@ -17,6 +17,23 @@ E.R = {} -- Runtime
 Engine[1] = E
 _G[AddOnName] = E
 
+-- Secret values: newer clients hide some combat data (health, power, auras,
+-- cooldowns, casts) from addons. Those values can't be compared or used in
+-- math, so the addon skips them instead of erroring.
+local issecretvalue = _G.issecretvalue
+
+function E.IsSecret(value)
+	return issecretvalue ~= nil and issecretvalue(value) == true
+end
+
+-- Returns `value`, or `default` when the game has hidden it.
+function E.Visible(value, default)
+	if issecretvalue ~= nil and issecretvalue(value) then
+		return default
+	end
+	return value
+end
+
 do
 	E.Libs = {}
 	E.LibsMinor = {}
