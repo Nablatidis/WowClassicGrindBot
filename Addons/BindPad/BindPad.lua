@@ -148,7 +148,8 @@ function BindPadFrame_OnEvent(self, event, ...)
     elseif event == "PLAYER_TALENT_UPDATE" then
         BindPadCore.PlayerTalentUpdate();
     elseif event == "CVAR_UPDATE" then
-        BindPadCore.CVAR_UPDATE(arg1, arg2);
+        -- not defined in this BindPad build; guard so changing settings does not error
+        if BindPadCore.CVAR_UPDATE then BindPadCore.CVAR_UPDATE(arg1, arg2); end
     elseif event == "ADDON_LOADED" and arg1 == addon then
         BindPadFrame_OutputText(event..":"..arg1);
     end
