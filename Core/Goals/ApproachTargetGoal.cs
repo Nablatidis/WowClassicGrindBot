@@ -168,7 +168,7 @@ public sealed partial class ApproachTargetGoal : GoapGoal, IGoapEventListener
                     }
                 }
 
-                Log($"Seems stuck! Clear Target.");
+                Log($"Seems stuck! Clear Target. range {playerReader.MinRange()}-{playerReader.MaxRange()} yd, WithinPullRange={playerReader.WithInPullRange()}, SpellInRange bits={playerReader.SpellInRange.Value}, LastUIError={playerReader.LastUIError}");
 
                 input.PressClearTarget();
                 input.TurnRandomDir(250 + Random.Shared.Next(250));
