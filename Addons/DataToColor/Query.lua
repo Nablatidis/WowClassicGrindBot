@@ -1,5 +1,6 @@
 local Load = select(2, ...)
 local DataToColor = unpack(Load)
+setfenv(1, DataToColor.Env)
 local Range = DataToColor.Libs.RangeCheck
 
 local bit = bit

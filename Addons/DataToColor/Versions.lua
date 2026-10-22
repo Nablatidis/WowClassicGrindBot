@@ -5,8 +5,22 @@ local DataToColor = unpack(Load)
 -- MODERN-ENGINE COMPAT (WoW Forever): restore classic globals the addon expects
 -- from the C_ namespaces. Only fills in functions that are missing (nil).
 --------------------------------------------------------------------------------
+-- The shims below are kept in a private table instead of being written into
+-- _G: Blizzard UI code calling addon-created globals (UnitBuff, GetSpellInfo,
+-- ...) becomes tainted, and the client then blocks protected actions and
+-- blames this addon ("has been blocked from an action only available to the
+-- Blizzard UI"). Addon files read globals through DataToColor.Env, which looks
+-- in the shims first and then in _G; global writes still go to _G.
+local compat = {}
+local function lookup(_, k)
+  local v = compat[k]
+  if v ~= nil then return v end
+  return _G[k]
+end
+DataToColor.Env = setmetatable({}, { __index = lookup, __newindex = _G })
+
 do
-  local G = _G
+  local G = setmetatable({}, { __index = lookup, __newindex = compat })
   local C_Spell, C_SpellBook, C_UnitAuras = G.C_Spell, G.C_SpellBook, G.C_UnitAuras
 
   local function alias(name, ns, fname)
@@ -137,6 +151,8 @@ do
   stub("GetSpellBaseCooldown", function() return nil end)
 end
 
+setfenv(1, DataToColor.Env)
+
 --------------------------------------------------------------------------------
 -- /dcapi : list game functions the addon uses that this client doesn't have
 --------------------------------------------------------------------------------
@@ -264,7 +280,7 @@ function DataToColor:ReportMissingApi()
   local missing = 0
   for i = 1, #REQUIRED_API do
     local name = REQUIRED_API[i]
-    if _G[name] == nil then
+    if DataToColor.Env[name] == nil then
       missing = missing + 1
       DataToColor:Print("missing: " .. name)
     end

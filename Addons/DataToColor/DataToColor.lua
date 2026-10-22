@@ -47,6 +47,7 @@ end
 
 local Load = select(2, ...)
 local DataToColor = unpack(Load)
+setfenv(1, DataToColor.Env)
 
 local IsSecret = DataToColor.IsSecret
 

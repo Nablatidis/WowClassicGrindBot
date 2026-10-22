@@ -10,6 +10,7 @@
 
 local Load = select(2, ...)
 local DataToColor = unpack(Load)
+setfenv(1, DataToColor.Env)
 
 -- Cache WoW API functions locally for performance
 local UnitAffectingCombat = UnitAffectingCombat

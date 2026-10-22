@@ -1,5 +1,6 @@
 local Load = select(2, ...)
 local DataToColor = unpack(Load)
+setfenv(1, DataToColor.Env)
 
 if not DataToColor.DATA_CONFIG.AUTO_SELL_GREY_ITEMS then
     return

@@ -14,6 +14,7 @@
 
 local Load = select(2, ...)
 local DataToColor = unpack(Load)
+setfenv(1, DataToColor.Env)
 
 -- Early exit if mail functionality is not enabled
 -- Can be configured via DATA_CONFIG or left always available

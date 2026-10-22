@@ -1,5 +1,6 @@
 local Load = select(2, ...)
 local DataToColor = unpack(Load)
+setfenv(1, DataToColor.Env)
 
 local band = bit.band
 local floor = math.floor
