@@ -1492,7 +1492,15 @@ function DataToColor:PS(name, slot)
         end
     end
     if best then
-        PickupSpellBookItem(best, bookType)
+        if PickupSpellBookItem then
+            PickupSpellBookItem(best, bookType)
+        elseif C_SpellBook and C_SpellBook.PickupSpellBookItem then
+            -- modern clients (WoW Forever): moved into C_SpellBook with a spell bank
+            local bank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0
+            C_SpellBook.PickupSpellBookItem(best, bank)
+        else
+            return false
+        end
         PlaceAction(slot)
         ClearCursor()
         return true
