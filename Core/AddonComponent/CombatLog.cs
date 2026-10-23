@@ -10,6 +10,9 @@ public sealed class CombatLog : IReader
     /// <summary>Target GUID cell (see PlayerReader.TargetGuid).</summary>
     public const int TargetGuidCell = 57;
 
+    /// <summary>Soft interact GUID cell (see PlayerReader.SoftInteract_Guid).</summary>
+    public const int SoftInteractGuidCell = 101;
+
     private readonly AddonBits bits;
 
     private bool wasInCombat;
@@ -82,6 +85,18 @@ public sealed class CombatLog : IReader
         TargetDodge.Reset();
     }
 
+    private void CreditFallbackKill(int guid)
+    {
+        fightingTargetGuid = 0;
+        if (!credited.Add(guid))
+            return;
+
+        DamageDone.Remove(guid);
+        DamageTaken.Remove(guid);
+        ToPull.Remove(guid);
+        KillCredit?.Invoke();
+    }
+
     public void Update(IAddonDataProvider reader)
     {
         bool combat = bits.Combat();
@@ -146,15 +161,16 @@ public sealed class CombatLog : IReader
             }
             else if (bits.Target_Dead() && targetGuid == fightingTargetGuid)
             {
-                fightingTargetGuid = 0;
-                if (credited.Add(targetGuid))
-                {
-                    DamageDone.Remove(targetGuid);
-                    DamageTaken.Remove(targetGuid);
-                    ToPull.Remove(targetGuid);
-                    KillCredit?.Invoke();
-                }
+                CreditFallbackKill(targetGuid);
             }
+        }
+
+        // WoW Forever clears the target the moment it dies; the corpse then
+        // shows up as the (dead) soft interact target instead.
+        if (fightingTargetGuid > 0 && bits.SoftInteract() && bits.SoftInteract_Dead() &&
+            reader.GetInt(SoftInteractGuidCell) == fightingTargetGuid)
+        {
+            CreditFallbackKill(fightingTargetGuid);
         }
 
         if (wasInCombat && !combat)
