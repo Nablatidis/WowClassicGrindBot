@@ -925,7 +925,7 @@ function DataToColor:CreateFrames()
             end
 
             Pixel(int, UnitHealthMax(DataToColor.C.unitTarget), 18)
-            Pixel(int, UnitHealth(DataToColor.C.unitTarget), 19)
+            Pixel(int, DataToColor:TargetHealthVisible(), 19)
 
             -- 20
             local bagNum = DataToColor.bagQueue:shift(globalTick)

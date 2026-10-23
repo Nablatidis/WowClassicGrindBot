@@ -102,13 +102,18 @@ do
         a.sourceUnit, a.isStealable, a.nameplateShowPersonal, a.spellId
     end
     local function make(byIndex, filterName)
+      -- In combat the game blocks aura access for other units and raises an
+      -- error ("Auras cannot be accessed when secret"). Treat that as "no aura"
+      -- so the addon's per-frame update keeps running.
+      local GetAuraDataByIndex = C_UnitAuras.GetAuraDataByIndex
       return function(unit, index, filter)
-        local a
+        local ok, a
         if byIndex then
-          if filter then a = byIndex(unit, index, filter) else a = byIndex(unit, index) end
-        elseif C_UnitAuras.GetAuraDataByIndex then
-          a = C_UnitAuras.GetAuraDataByIndex(unit, index, filter and (filterName .. "|" .. filter) or filterName)
+          if filter then ok, a = pcall(byIndex, unit, index, filter) else ok, a = pcall(byIndex, unit, index) end
+        elseif GetAuraDataByIndex then
+          ok, a = pcall(GetAuraDataByIndex, unit, index, filter and (filterName .. "|" .. filter) or filterName)
         end
+        if not ok then return nil end
         return unpackAura(a)
       end
     end

@@ -527,9 +527,11 @@ function DataToColor:isActionUseable(min, max)
   local isUsableBits = 0
   for slot = min, max do
     local start, duration, enabled = GetActionCooldown(slot)
-    -- Hidden (secret) cooldowns: treat the slot as not ready and don't track it
+    -- Hidden (secret) cooldowns (WoW Forever hides them in combat): assume the
+    -- slot is ready and don't track a cooldown. Treating it as "not ready" made
+    -- every action bar button unusable for the whole fight.
     if DataToColor.IsSecret(start) or DataToColor.IsSecret(duration) or DataToColor.IsSecret(enabled) then
-      start, duration, enabled = 1, 0, 0
+      start, duration, enabled = 0, 0, 0
     end
 
     local actionType, id, _ = GetActionInfo(slot)
@@ -969,3 +971,30 @@ function DataToColor:MiniMapSettings2()
         bit.lshift(band(offsetTop, 0xFFF), 12)
     )
 end
+
+-- Target health (cell 19). WoW Forever hides a mob's current health in combat.
+-- Send the last value we could see for this target (usually full health at the
+-- pull), falling back to its max health, instead of 0 which reads as "dying".
+local lastTargetHealthGuid = nil
+local lastTargetHealth = nil
+function DataToColor:TargetHealthVisible()
+    local unit = DataToColor.C.unitTarget
+    local guid = UnitGUID(unit)
+    if DataToColor.IsSecret(guid) then guid = nil end
+    if guid ~= lastTargetHealthGuid then
+        lastTargetHealthGuid = guid
+        lastTargetHealth = nil
+    end
+
+    local health = UnitHealth(unit)
+    if not DataToColor.IsSecret(health) then
+        lastTargetHealth = health
+        return health
+    end
+
+    if lastTargetHealth then
+        return lastTargetHealth
+    end
+    return DataToColor.Visible(UnitHealthMax(unit), 0)
+end
+

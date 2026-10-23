@@ -97,6 +97,7 @@ function DataToColor:RegisterEvents()
 
     DataToColor:RegisterEvent("UI_ERROR_MESSAGE", 'OnUIErrorMessage')
     DataToColor:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", 'UnfilteredCombatEvent')
+    DataToColor:InitNoCombatLogFallback()
     DataToColor:RegisterEvent("UNIT_SPELLCAST_SENT", 'OnUnitSpellCastSent')
     DataToColor:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", 'OnUnitSpellCastSucceeded')
     DataToColor:RegisterEvent("UNIT_SPELLCAST_FAILED", 'OnUnitSpellCastFailed')
@@ -1117,3 +1118,85 @@ function DataToColor:OnUnitPowerUpdate_ActionCache(event, unit)
         DataToColor:InvalidateActionUseableCache()
     end
 end
+
+--------------------------------------------------------------------------------
+-- No combat log (WoW Forever has no CombatLogGetCurrentEventInfo)
+--
+-- The bot relies on combat log data for kills (looting/skinning, kill stats),
+-- for "who attacks me" and for "who did I hit". Without it, approximate those
+-- from the current target, using values that stay visible in combat:
+--   * target dies (alive -> dead)            => creature died  (cell 66)
+--   * in combat and the target is in combat  => damage done    (cell 64)
+--   * the target is targeting the player     => damage taken   (cell 65)
+--------------------------------------------------------------------------------
+local fallbackGuid = nil
+local fallbackAlive = false
+local fallbackDone = false
+local fallbackTaken = false
+local fallbackDeathSent = false
+
+local function NoCombatLogUpdate()
+    local unit = DataToColor.C.unitTarget
+    if not UnitExists(unit) then
+        fallbackGuid = nil
+        return
+    end
+
+    local guid = DataToColor:getGuidFromUnit(unit)
+    if DataToColor.IsSecret(guid) or not guid or guid == 0 then
+        return
+    end
+
+    local dead = UnitIsDead(unit)
+    if DataToColor.IsSecret(dead) then
+        return
+    end
+
+    if guid ~= fallbackGuid then
+        fallbackGuid = guid
+        fallbackAlive = not dead
+        fallbackDone = false
+        fallbackTaken = false
+        fallbackDeathSent = false
+    end
+
+    if not dead and UnitAffectingCombat(DataToColor.C.unitPlayer) then
+        if not fallbackDone and UnitAffectingCombat(unit) then
+            fallbackDone = true
+            DataToColor.CombatDamageDoneQueue:push(guid)
+        end
+        if not fallbackTaken and UnitIsUnit(DataToColor.C.unitTargetTarget, DataToColor.C.unitPlayer) then
+            fallbackTaken = true
+            DataToColor.CombatDamageTakenQueue:push(guid)
+        end
+    end
+
+    if dead and fallbackAlive and not fallbackDeathSent and not UnitIsPlayer(unit) then
+        fallbackDeathSent = true
+        DataToColor.CombatCreatureDiedQueue:push(guid)
+    end
+
+    fallbackAlive = not dead
+end
+
+function DataToColor:InitNoCombatLogFallback()
+    if CombatLogGetCurrentEventInfo then
+        return -- real combat log available
+    end
+
+    local frame = CreateFrame("Frame")
+    frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+    frame:RegisterEvent("PLAYER_REGEN_DISABLED")
+    frame:RegisterEvent("PLAYER_DEAD")
+    frame:RegisterUnitEvent("UNIT_HEALTH", "target")
+    frame:RegisterUnitEvent("UNIT_FLAGS", "target")
+    frame:RegisterUnitEvent("UNIT_TARGET", "target")
+    frame:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_DEAD" then
+            DataToColor.CombatCreatureDiedQueue:push(16777215) -- player death
+            return
+        end
+        NoCombatLogUpdate()
+    end)
+end
+
