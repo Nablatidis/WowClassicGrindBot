@@ -10,11 +10,27 @@
 
 @code {
 
-    protected override async void OnInitialized()
+    // A browser left on this page reconnects after every restart, which used to
+    // restart the server again in a loop. The server restarts inside the same
+    // process, so this static survives it: right after a restart, just go home.
+    private static readonly TimeSpan MinTimeBetweenRestarts = TimeSpan.FromSeconds(30);
+    private static DateTime lastRestart = DateTime.MinValue;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!firstRender)
+            return;
+
+        if (DateTime.UtcNow - lastRestart < MinTimeBetweenRestarts)
+        {
+            NavigationManager.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        lastRestart = DateTime.UtcNow;
         this.botController.Shutdown();
-        await Task.Delay(1000);
-        NavigationManager.NavigateTo("/");
+        NavigationManager.NavigateTo("/", forceLoad: true);
+        await Task.Delay(1500);
         lifetime.StopApplication();
     }
 }
