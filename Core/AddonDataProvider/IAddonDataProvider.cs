@@ -42,6 +42,8 @@ public interface IAddonDataProvider : IDisposable
 
             output[frame.Index] = pixel.B | (pixel.G << 8) | (pixel.R << 16);
         }
+
+        SecretBars.Apply(bd, frames, output);
     }
 
     int GetInt(int index)

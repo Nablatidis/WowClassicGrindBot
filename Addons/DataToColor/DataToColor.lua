@@ -15,6 +15,20 @@ local CELL_SPACING = 1 -- 0 or 1
 
 local GLOBAL_TIME_CELL = NUMBER_OF_FRAMES - 2
 
+-- Secret value bars, drawn right after the data strip.
+-- Addons can't read secret values, but a StatusBar can display them. The bot
+-- measures how much of each bar is filled (red = filled, blue = empty) and
+-- multiplies by the visible max value. A green bar means "value is not secret,
+-- use the cell". Order must match Core/AddonDataProvider/SecretBars.cs.
+local SECRET_BAR_WIDTH = 80
+local SECRET_BAR_GAP = 2
+local SECRET_BAR_POWER = 1
+local SECRET_BAR_MANA = 2
+local SECRET_BAR_PLAYER_HEALTH = 3
+local SECRET_BAR_TARGET_HEALTH = 4
+local SECRET_BAR_PET_HEALTH = 5
+local SECRET_BAR_COUNT = 5
+
 -- Dont modify values below
 
 if not Enum or not Enum.PowerType then
@@ -840,6 +854,8 @@ function DataToColor:CreateFrames()
     local unitsTargetCache = 0
     local unitsTargetTick = -999
 
+    local UpdateSecretBars
+
     local function updateFrames()
         if not SETUP_SEQUENCE and globalTick >= initPhase then
             -- Ensure globalTime is past the C# FullReset threshold (Value <= 3)
@@ -876,6 +892,8 @@ function DataToColor:CreateFrames()
 
             Pixel(int, UnitPowerMax(DataToColor.C.unitPlayer, nil), 12) -- either mana, rage, energy
             Pixel(int, UnitPower(DataToColor.C.unitPlayer, nil), 13) -- either mana, rage, energy
+
+            UpdateSecretBars()
 
             if DataToColor.C.CHARACTER_CLASS_ID == 6 then -- death Knight
                 local bloodRunes = 0
@@ -1348,6 +1366,55 @@ function DataToColor:CreateFrames()
         globalTick = globalTick + 1
     end
 
+    -- Secret value bars (see SECRET_BAR_* above)
+    local secretBarsFrame
+    local secretBars = {}
+    local secretBarActive = {}
+    local secretBarMax = {}
+
+    local function SecretBar(i, value, max)
+        local bar = secretBars[i]
+        if value ~= nil and IsSecret(value) then
+            if secretBarActive[i] ~= true then
+                secretBarActive[i] = true
+                secretBarMax[i] = nil
+                bar:SetStatusBarColor(1, 0, 0, 1)
+            end
+            if max == nil then
+                max = 1
+            end
+            if IsSecret(max) then
+                bar:SetMinMaxValues(0, max)
+            elseif max ~= secretBarMax[i] then
+                secretBarMax[i] = max
+                bar:SetMinMaxValues(0, max > 0 and max or 1)
+            end
+            bar:SetValue(value)
+        elseif secretBarActive[i] ~= false then
+            secretBarActive[i] = false
+            secretBarMax[i] = nil
+            bar:SetStatusBarColor(0, 1, 0, 1)
+            bar:SetMinMaxValues(0, 1)
+            bar:SetValue(1)
+        end
+    end
+
+    UpdateSecretBars = function()
+        local player = DataToColor.C.unitPlayer
+        local target = DataToColor.C.unitTarget
+        local pet = DataToColor.C.unitPet
+
+        SecretBar(SECRET_BAR_POWER, UnitPower(player), UnitPowerMax(player))
+        if DataToColor.C.CHARACTER_CLASS_ID == 6 then -- death knight: runes in the mana cells
+            SecretBar(SECRET_BAR_MANA, nil, nil)
+        else
+            SecretBar(SECRET_BAR_MANA, UnitPower(player, PowerType.Mana), UnitPowerMax(player, PowerType.Mana))
+        end
+        SecretBar(SECRET_BAR_PLAYER_HEALTH, UnitHealth(player), UnitHealthMax(player))
+        SecretBar(SECRET_BAR_TARGET_HEALTH, UnitHealth(target), UnitHealthMax(target))
+        SecretBar(SECRET_BAR_PET_HEALTH, UnitHealth(pet), UnitHealthMax(pet))
+    end
+
     local function genFrame(name, x, y)
         local f = CreateFrame("Frame", name, UIParent, BackdropTemplateMixin and "BackdropTemplate") or CreateFrame("Frame", name, UIParent)
 
@@ -1383,7 +1450,49 @@ function DataToColor:CreateFrames()
         updateCount[frame] = 0
     end
 
-    backgroundframe:SetScript("OnUpdate", updateFrames)
+    -- Secret value bars: black background (the gaps) with one bar per value.
+    local stripWidth = ceil(NUMBER_OF_FRAMES / FRAME_ROWS) * (CELL_SIZE + CELL_SPACING)
+    secretBarsFrame = genFrame("frame_secret_bg", 0, 0)
+    secretBarsFrame:ClearAllPoints()
+    secretBarsFrame:SetPoint("TOPLEFT", stripWidth, 0)
+    secretBarsFrame:SetHeight(CELL_SIZE + CELL_SPACING)
+    secretBarsFrame:SetWidth(SECRET_BAR_GAP + SECRET_BAR_COUNT * (SECRET_BAR_WIDTH + SECRET_BAR_GAP))
+    secretBarsFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+    secretBarsFrame:SetBackdropColor(0, 0, 0, 1)
+
+    for i = 1, SECRET_BAR_COUNT do
+        local holder = CreateFrame("Frame", nil, secretBarsFrame, BackdropTemplateMixin and "BackdropTemplate")
+        holder:SetPoint("TOPLEFT", secretBarsFrame, "TOPLEFT", SECRET_BAR_GAP + (i - 1) * (SECRET_BAR_WIDTH + SECRET_BAR_GAP), 0)
+        holder:SetHeight(CELL_SIZE)
+        holder:SetWidth(SECRET_BAR_WIDTH)
+        holder:SetBackdrop({
+            bgFile = "Interface\\AddOns\\DataToColor\\white.tga",
+            insets = { top = 0, left = 0, bottom = 0, right = 0 },
+        })
+        holder:SetBackdropColor(0, 0, 1, 1)
+        holder:SetFrameStrata("TOOLTIP")
+
+        local bar = CreateFrame("StatusBar", nil, holder)
+        bar:SetAllPoints(holder)
+        bar:SetStatusBarTexture("Interface\\AddOns\\DataToColor\\white.tga")
+        bar:SetFrameStrata("TOOLTIP")
+        bar:SetFrameLevel(holder:GetFrameLevel() + 1)
+        secretBars[i] = bar
+        SecretBar(i, nil, nil)
+    end
+
+    local function updateFramesAndBars()
+        if SETUP_SEQUENCE or globalTick < initPhase then
+            if secretBarsFrame:IsShown() then
+                secretBarsFrame:Hide()
+            end
+        elseif not secretBarsFrame:IsShown() then
+            secretBarsFrame:Show()
+        end
+        updateFrames()
+    end
+
+    backgroundframe:SetScript("OnUpdate", updateFramesAndBars)
 
     local function DumpCallCount(maxRow)
         print("Frame        count  val --- globalTick: " .. globalTick)
