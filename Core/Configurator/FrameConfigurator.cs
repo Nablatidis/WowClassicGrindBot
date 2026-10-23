@@ -416,6 +416,15 @@ public sealed class FrameConfigurator : IDisposable
 
     private void ToggleInGameConfiguration()
     {
+        // Type the addon slash command (/dc) into chat. The SHIFT-PAGEUP BindPad
+        // button does not react on some clients/characters (WoW Forever).
+        string command = addonConfigurator.Config.Command;
+        if (!string.IsNullOrEmpty(command))
+        {
+            input.RunChatCommand("/" + command);
+            return;
+        }
+
         // Press SHIFT-PAGEUP to trigger CUSTOM_CONFIG (/dc)
         input.PressRandomWithModifier(ConsoleKey.PageUp, ModifierKey.Shift, 50);
     }

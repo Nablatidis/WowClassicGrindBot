@@ -203,11 +203,45 @@ public sealed partial class WowProcessInput : IMouseInput
     }
 
     /// <summary>
-    /// Presses SHIFT-PAGEDOWN to trigger CUSTOM_FLUSH (/dcflush) in the addon.
+    /// Returns the addon flush slash command (e.g. "/dcflush"), or null when unknown.
+    /// Set by Core once the addon config is loaded.
+    /// </summary>
+    public static Func<string?>? FlushChatCommandProvider { get; set; }
+
+    /// <summary>
+    /// Triggers CUSTOM_FLUSH (/dcflush) in the addon. Types the slash command into
+    /// chat when known, because the SHIFT-PAGEDOWN BindPad button does not react on
+    /// some clients/characters (WoW Forever). Falls back to the key otherwise.
     /// </summary>
     public void PressFlushKey()
     {
+        string? command = FlushChatCommandProvider?.Invoke();
+        if (!string.IsNullOrEmpty(command))
+        {
+            RunChatCommand(command);
+            return;
+        }
+
         PressRandomWithModifier(ConsoleKey.PageDown, ModifierKey.Shift, 50);
+    }
+
+    /// <summary>
+    /// Opens the chat box, types the command and sends it.
+    /// </summary>
+    public void RunChatCommand(string command, CancellationToken token = default)
+    {
+        SetForegroundWindow();
+
+        int delay = Random.Shared.Next(100, 250);
+
+        PressRandom(ConsoleKey.Enter, token: token);
+        token.WaitHandle.WaitOne(delay);
+
+        SendText(command);
+        token.WaitHandle.WaitOne(delay);
+
+        PressRandom(ConsoleKey.Enter, token: token);
+        token.WaitHandle.WaitOne(delay);
     }
 
     private bool IsMovementKey(ConsoleKey key) =>

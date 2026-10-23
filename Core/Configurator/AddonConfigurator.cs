@@ -34,6 +34,11 @@ public sealed partial class AddonConfigurator
         this.process = process;
 
         Config = AddonConfig.Load();
+
+        // Let the input layer type "/<command>flush" instead of relying on the
+        // SHIFT-PAGEDOWN BindPad button.
+        WowProcessInput.FlushChatCommandProvider = () =>
+            string.IsNullOrEmpty(Config.Command) ? null : "/" + Config.CommandFlush;
     }
 
     public bool Installed()
