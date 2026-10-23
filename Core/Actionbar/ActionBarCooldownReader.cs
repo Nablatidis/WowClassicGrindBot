@@ -58,6 +58,9 @@ public sealed class ActionBarCooldownReader : IReader
 
         ref readonly Data d = ref data[index];
 
-        return Max((int)((d.End - GetTimestamp()) / TimeSpan.TicksPerMillisecond), 0);
+        int remaining = Max((int)((d.End - GetTimestamp()) / TimeSpan.TicksPerMillisecond), 0);
+
+        // hidden cooldowns in combat: the addon's tracker shows a sweep instead
+        return Max(remaining, SecretBars.CooldownMs(index));
     }
 }

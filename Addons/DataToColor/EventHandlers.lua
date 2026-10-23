@@ -98,6 +98,7 @@ function DataToColor:RegisterEvents()
     DataToColor:RegisterEvent("UI_ERROR_MESSAGE", 'OnUIErrorMessage')
     DataToColor:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", 'UnfilteredCombatEvent')
     DataToColor:InitNoCombatLogFallback()
+    DataToColor:InitTrackerEvents()
     DataToColor:RegisterEvent("UNIT_SPELLCAST_SENT", 'OnUnitSpellCastSent')
     DataToColor:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", 'OnUnitSpellCastSucceeded')
     DataToColor:RegisterEvent("UNIT_SPELLCAST_FAILED", 'OnUnitSpellCastFailed')
@@ -1200,3 +1201,19 @@ function DataToColor:InitNoCombatLogFallback()
     end)
 end
 
+-- Resource tracker cooldown squares (DataToColor.lua). Own frame, so these
+-- events don't replace the AceEvent handlers registered above.
+function DataToColor:InitTrackerEvents()
+    local frame = CreateFrame("Frame")
+    frame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
+    frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+    frame:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
+    frame:RegisterEvent("UPDATE_BONUS_ACTIONBAR")
+    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    frame:SetScript("OnEvent", function()
+        if DataToColor.UpdateTrackerCooldowns then
+            DataToColor:UpdateTrackerCooldowns()
+        end
+    end)
+end

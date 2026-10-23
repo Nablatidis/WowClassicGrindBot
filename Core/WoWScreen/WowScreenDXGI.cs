@@ -235,8 +235,8 @@ public sealed class WowScreenDXGI : IWowScreen, IAddonDataProvider, IGpuTextureP
         addonSize.Width++;
         addonSize.Height++;
 
-        // also capture the secret value bars drawn after the strip
-        addonSize.Width = SecretBars.CaptureWidth(addonSize.Width, screenRect.Width);
+        // also capture the addon's resource tracker panel (hidden values)
+        addonSize = SecretBars.CaptureSize(frames, addonSize, screenRect.Width, screenRect.Height);
 
         addonImage = new(ContiguousJpegConfiguration, addonSize.Width, addonSize.Height);
 

@@ -15,19 +15,33 @@ local CELL_SPACING = 1 -- 0 or 1
 
 local GLOBAL_TIME_CELL = NUMBER_OF_FRAMES - 2
 
--- Secret value bars, drawn right after the data strip.
--- Addons can't read secret values, but a StatusBar can display them. The bot
--- measures how much of each bar is filled (red = filled, blue = empty) and
--- multiplies by the visible max value. A green bar means "value is not secret,
--- use the cell". Order must match Core/AddonDataProvider/SecretBars.cs.
-local SECRET_BAR_WIDTH = 80
-local SECRET_BAR_GAP = 2
-local SECRET_BAR_POWER = 1
-local SECRET_BAR_MANA = 2
-local SECRET_BAR_PLAYER_HEALTH = 3
-local SECRET_BAR_TARGET_HEALTH = 4
-local SECRET_BAR_PET_HEALTH = 5
-local SECRET_BAR_COUNT = 5
+-- Resource tracker: a small panel showing power, combo points, health and
+-- cooldowns. WoW Forever hides (secret) values like energy, health and
+-- cooldowns from addons, but StatusBars and Cooldown frames can still display
+-- them, and the bot measures the panel on screen. Positions are in UI units
+-- from the top left of UIParent. Keep in sync with Core/AddonDataProvider/SecretBars.cs.
+local TRACKER_X = 700
+local TRACKER_Y = 12
+local TRACKER_WIDTH = 196
+local TRACKER_HEIGHT = 68
+-- x, y, width, height inside the panel
+local TRACKER_POWER = { 8, 8, 180, 8 }
+local TRACKER_PLAYER_HEALTH = { 8, 29, 88, 6 }
+local TRACKER_TARGET_HEALTH = { 102, 29, 86, 6 }
+local TRACKER_MANA = { 8, 41, 88, 4 }
+local TRACKER_PET_HEALTH = { 102, 41, 86, 4 }
+-- grey outline around each bar; the bot checks it to find the panel
+local TRACKER_BAR_BORDER = 2
+local TRACKER_COMBO_Y = 20
+local TRACKER_COMBO_HEIGHT = 5
+local TRACKER_COMBO_WIDTH = 32
+local TRACKER_COMBO_GAP = 5
+local TRACKER_COMBO_COUNT = 5
+local TRACKER_CD_X = 10
+local TRACKER_CD_Y = 50
+local TRACKER_CD_SIZE = 12
+local TRACKER_CD_GAP = 3
+local TRACKER_CD_COUNT = 12
 
 -- Dont modify values below
 
@@ -854,7 +868,7 @@ function DataToColor:CreateFrames()
     local unitsTargetCache = 0
     local unitsTargetTick = -999
 
-    local UpdateSecretBars
+    local UpdateTracker
 
     local function updateFrames()
         if not SETUP_SEQUENCE and globalTick >= initPhase then
@@ -893,7 +907,7 @@ function DataToColor:CreateFrames()
             Pixel(int, UnitPowerMax(DataToColor.C.unitPlayer, nil), 12) -- either mana, rage, energy
             Pixel(int, UnitPower(DataToColor.C.unitPlayer, nil), 13) -- either mana, rage, energy
 
-            UpdateSecretBars()
+            UpdateTracker()
 
             if DataToColor.C.CHARACTER_CLASS_ID == 6 then -- death Knight
                 local bloodRunes = 0
@@ -1366,53 +1380,95 @@ function DataToColor:CreateFrames()
         globalTick = globalTick + 1
     end
 
-    -- Secret value bars (see SECRET_BAR_* above)
-    local secretBarsFrame
-    local secretBars = {}
-    local secretBarActive = {}
-    local secretBarMax = {}
+    -- Resource tracker (see TRACKER_* above)
+    local tracker
+    local trackerBars = {}
+    local trackerBarMax = {}
+    local trackerCombo = {}
+    local trackerComboCount = -1
+    local trackerCooldowns = {}
+    local trackerPowerType = -1
 
-    local function SecretBar(i, value, max)
-        local bar = secretBars[i]
-        if value ~= nil and IsSecret(value) then
-            if secretBarActive[i] ~= true then
-                secretBarActive[i] = true
-                secretBarMax[i] = nil
-                bar:SetStatusBarColor(1, 0, 0, 1)
-            end
-            if max == nil then
-                max = 1
-            end
-            if IsSecret(max) then
-                bar:SetMinMaxValues(0, max)
-            elseif max ~= secretBarMax[i] then
-                secretBarMax[i] = max
-                bar:SetMinMaxValues(0, max > 0 and max or 1)
-            end
-            bar:SetValue(value)
-        elseif secretBarActive[i] ~= false then
-            secretBarActive[i] = false
-            secretBarMax[i] = nil
-            bar:SetStatusBarColor(0, 1, 0, 1)
-            bar:SetMinMaxValues(0, 1)
-            bar:SetValue(1)
+    local POWER_COLOR = {
+        [0] = { 0.2, 0.4, 1 },      -- mana
+        [1] = { 1, 0.1, 0.1 },      -- rage
+        [2] = { 1, 0.5, 0.25 },     -- focus
+        [3] = { 1, 0.96, 0.41 },    -- energy
+        [6] = { 0, 0.82, 1 },       -- runic power
+    }
+
+    local function TrackerBar(key, value, max)
+        local bar = trackerBars[key]
+        if value == nil then
+            value = 0
         end
+        if max == nil then
+            max = 1
+        end
+        if IsSecret(max) then
+            trackerBarMax[key] = nil
+            bar:SetMinMaxValues(0, max)
+        elseif max ~= trackerBarMax[key] then
+            trackerBarMax[key] = max
+            bar:SetMinMaxValues(0, max > 0 and max or 1)
+        end
+        bar:SetValue(value)
     end
 
-    UpdateSecretBars = function()
+    UpdateTracker = function()
         local player = DataToColor.C.unitPlayer
         local target = DataToColor.C.unitTarget
         local pet = DataToColor.C.unitPet
 
-        SecretBar(SECRET_BAR_POWER, UnitPower(player), UnitPowerMax(player))
-        if DataToColor.C.CHARACTER_CLASS_ID == 6 then -- death knight: runes in the mana cells
-            SecretBar(SECRET_BAR_MANA, nil, nil)
-        else
-            SecretBar(SECRET_BAR_MANA, UnitPower(player, PowerType.Mana), UnitPowerMax(player, PowerType.Mana))
+        local powerType = UnitPowerType(player)
+        if not IsSecret(powerType) and powerType ~= trackerPowerType then
+            trackerPowerType = powerType
+            local c = POWER_COLOR[powerType] or POWER_COLOR[0]
+            trackerBars.power:SetStatusBarColor(c[1], c[2], c[3], 1)
         end
-        SecretBar(SECRET_BAR_PLAYER_HEALTH, UnitHealth(player), UnitHealthMax(player))
-        SecretBar(SECRET_BAR_TARGET_HEALTH, UnitHealth(target), UnitHealthMax(target))
-        SecretBar(SECRET_BAR_PET_HEALTH, UnitHealth(pet), UnitHealthMax(pet))
+
+        TrackerBar("power", UnitPower(player), UnitPowerMax(player))
+        TrackerBar("playerHealth", UnitHealth(player), UnitHealthMax(player))
+        TrackerBar("targetHealth", UnitHealth(target), UnitHealthMax(target))
+        if DataToColor.C.CHARACTER_CLASS_ID == 6 then -- death knight: runes in the mana cells
+            TrackerBar("mana", 0, 1)
+        else
+            TrackerBar("mana", UnitPower(player, PowerType.Mana), UnitPowerMax(player, PowerType.Mana))
+        end
+        TrackerBar("petHealth", UnitHealth(pet), UnitHealthMax(pet))
+
+        local combo = DataToColor.Visible(GetComboPoints(player, target), 0) or 0
+        if combo ~= trackerComboCount then
+            trackerComboCount = combo
+            for i = 1, TRACKER_COMBO_COUNT do
+                if i <= combo then
+                    trackerCombo[i]:SetBackdropColor(1, 0.8, 0.1, 1)
+                else
+                    trackerCombo[i]:SetBackdropColor(0.15, 0.15, 0.15, 1)
+                end
+            end
+        end
+    end
+
+    -- Called from EventHandlers.lua on cooldown and action bar changes.
+    function DataToColor:UpdateTrackerCooldowns()
+        for i = 1, #trackerCooldowns do
+            local cd = trackerCooldowns[i]
+            local button = _G["ActionButton" .. i]
+            local slot = button and type(button.action) == "number" and button.action or i
+            local start, duration = GetActionCooldown(slot)
+            if start == nil or duration == nil then
+                cd:Clear()
+            elseif not pcall(cd.SetCooldown, cd, start, duration) then
+                -- clients that only take a duration object for hidden cooldowns
+                local api = C_ActionBar
+                if api and api.GetActionCooldownDuration and cd.SetCooldownFromDurationObject then
+                    pcall(function()
+                        cd:SetCooldownFromDurationObject(api.GetActionCooldownDuration(slot))
+                    end)
+                end
+            end
+        end
     end
 
     local function genFrame(name, x, y)
@@ -1450,49 +1506,86 @@ function DataToColor:CreateFrames()
         updateCount[frame] = 0
     end
 
-    -- Secret value bars: black background (the gaps) with one bar per value.
-    local stripWidth = ceil(NUMBER_OF_FRAMES / FRAME_ROWS) * (CELL_SIZE + CELL_SPACING)
-    secretBarsFrame = genFrame("frame_secret_bg", 0, 0)
-    secretBarsFrame:ClearAllPoints()
-    secretBarsFrame:SetPoint("TOPLEFT", stripWidth, 0)
-    secretBarsFrame:SetHeight(CELL_SIZE + CELL_SPACING)
-    secretBarsFrame:SetWidth(SECRET_BAR_GAP + SECRET_BAR_COUNT * (SECRET_BAR_WIDTH + SECRET_BAR_GAP))
-    secretBarsFrame:SetFrameStrata("FULLSCREEN_DIALOG")
-    secretBarsFrame:SetBackdropColor(0, 0, 0, 1)
+    -- Resource tracker panel
+    local WHITE = "Interface\\AddOns\\DataToColor\\white.tga"
+    tracker = CreateFrame("Frame", nil, UIParent, BackdropTemplateMixin and "BackdropTemplate")
+    tracker:SetPoint("TOPLEFT", UIParent, "TOPLEFT", TRACKER_X, -TRACKER_Y)
+    tracker:SetWidth(TRACKER_WIDTH)
+    tracker:SetHeight(TRACKER_HEIGHT)
+    tracker:SetFrameStrata("MEDIUM")
+    tracker:SetBackdrop({
+        bgFile = WHITE,
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 12,
+        insets = { top = 3, left = 3, bottom = 3, right = 3 },
+    })
+    tracker:SetBackdropColor(0, 0, 0, 0.6)
+    tracker:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
 
-    for i = 1, SECRET_BAR_COUNT do
-        local holder = CreateFrame("Frame", nil, secretBarsFrame, BackdropTemplateMixin and "BackdropTemplate")
-        holder:SetPoint("TOPLEFT", secretBarsFrame, "TOPLEFT", SECRET_BAR_GAP + (i - 1) * (SECRET_BAR_WIDTH + SECRET_BAR_GAP), 0)
-        holder:SetHeight(CELL_SIZE)
-        holder:SetWidth(SECRET_BAR_WIDTH)
-        holder:SetBackdrop({
-            bgFile = "Interface\\AddOns\\DataToColor\\white.tga",
-            insets = { top = 0, left = 0, bottom = 0, right = 0 },
-        })
-        holder:SetBackdropColor(0, 0, 1, 1)
-        holder:SetFrameStrata("TOOLTIP")
-
-        local bar = CreateFrame("StatusBar", nil, holder)
-        bar:SetAllPoints(holder)
-        bar:SetStatusBarTexture("Interface\\AddOns\\DataToColor\\white.tga")
-        bar:SetFrameStrata("TOOLTIP")
-        bar:SetFrameLevel(holder:GetFrameLevel() + 1)
-        secretBars[i] = bar
-        SecretBar(i, nil, nil)
+    local function TrackerBox(x, y, w, h)
+        local box = CreateFrame("Frame", nil, tracker, BackdropTemplateMixin and "BackdropTemplate")
+        box:SetPoint("TOPLEFT", tracker, "TOPLEFT", x, -y)
+        box:SetWidth(w)
+        box:SetHeight(h)
+        box:SetBackdrop({ bgFile = WHITE, insets = { top = 0, left = 0, bottom = 0, right = 0 } })
+        box:SetBackdropColor(0.08, 0.08, 0.08, 1)
+        return box
     end
 
-    local function updateFramesAndBars()
+    local function NewTrackerBar(key, rect, r, g, b)
+        local border = TrackerBox(rect[1] - TRACKER_BAR_BORDER, rect[2] - TRACKER_BAR_BORDER,
+            rect[3] + 2 * TRACKER_BAR_BORDER, rect[4] + 2 * TRACKER_BAR_BORDER)
+        border:SetBackdropColor(0.35, 0.35, 0.35, 1)
+        local box = TrackerBox(rect[1], rect[2], rect[3], rect[4])
+        box:SetFrameLevel(border:GetFrameLevel() + 1)
+        local bar = CreateFrame("StatusBar", nil, box)
+        bar:SetAllPoints(box)
+        bar:SetFrameLevel(box:GetFrameLevel() + 1)
+        bar:SetStatusBarTexture(WHITE)
+        bar:SetStatusBarColor(r, g, b, 1)
+        bar:SetMinMaxValues(0, 1)
+        bar:SetValue(0)
+        trackerBars[key] = bar
+    end
+
+    NewTrackerBar("power", TRACKER_POWER, 1, 0.96, 0.41)
+    NewTrackerBar("playerHealth", TRACKER_PLAYER_HEALTH, 0.1, 0.8, 0.1)
+    NewTrackerBar("targetHealth", TRACKER_TARGET_HEALTH, 0.8, 0.15, 0.15)
+    NewTrackerBar("mana", TRACKER_MANA, 0.2, 0.4, 1)
+    NewTrackerBar("petHealth", TRACKER_PET_HEALTH, 0.3, 0.8, 0.3)
+
+    for i = 1, TRACKER_COMBO_COUNT do
+        local x = TRACKER_POWER[1] + (i - 1) * (TRACKER_COMBO_WIDTH + TRACKER_COMBO_GAP)
+        trackerCombo[i] = TrackerBox(x, TRACKER_COMBO_Y, TRACKER_COMBO_WIDTH, TRACKER_COMBO_HEIGHT)
+        trackerCombo[i]:SetBackdropColor(0.15, 0.15, 0.15, 1)
+    end
+
+    for i = 1, TRACKER_CD_COUNT do
+        local x = TRACKER_CD_X + (i - 1) * (TRACKER_CD_SIZE + TRACKER_CD_GAP)
+        local box = TrackerBox(x, TRACKER_CD_Y, TRACKER_CD_SIZE, TRACKER_CD_SIZE)
+        local cd = CreateFrame("Cooldown", nil, box)
+        cd:SetAllPoints(box)
+        if cd.SetSwipeTexture then cd:SetSwipeTexture(WHITE) end
+        if cd.SetSwipeColor then cd:SetSwipeColor(0.85, 0.85, 0.85, 1) end
+        if cd.SetDrawEdge then cd:SetDrawEdge(false) end
+        if cd.SetDrawBling then cd:SetDrawBling(false) end
+        if cd.SetHideCountdownNumbers then cd:SetHideCountdownNumbers(true) end
+        trackerCooldowns[i] = cd
+    end
+
+    local function updateFramesAndTracker()
         if SETUP_SEQUENCE or globalTick < initPhase then
-            if secretBarsFrame:IsShown() then
-                secretBarsFrame:Hide()
+            if tracker:IsShown() then
+                tracker:Hide()
             end
-        elseif not secretBarsFrame:IsShown() then
-            secretBarsFrame:Show()
+        elseif not tracker:IsShown() then
+            tracker:Show()
+            DataToColor:UpdateTrackerCooldowns()
         end
         updateFrames()
     end
 
-    backgroundframe:SetScript("OnUpdate", updateFramesAndBars)
+    backgroundframe:SetScript("OnUpdate", updateFramesAndTracker)
 
     local function DumpCallCount(maxRow)
         print("Frame        count  val --- globalTick: " .. globalTick)

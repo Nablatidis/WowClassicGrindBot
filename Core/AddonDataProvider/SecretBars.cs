@@ -8,34 +8,43 @@ using System.Runtime.CompilerServices;
 namespace Core;
 
 /// <summary>
-/// Reads the secret value bars the addon draws right after the data strip.
-/// Modern clients (WoW Forever) hide values like energy or mob health from addons,
-/// but a StatusBar can still display them. Each bar is red where filled, blue where
-/// empty, and fully green when the value is not secret (then the cell value is used).
-/// The filled fraction times the visible max cell gives the current value.
-/// Order must match SECRET_BAR_* in Addons/DataToColor/DataToColor.lua.
+/// Reads the addon's resource tracker panel from the screen.
+/// Modern clients (WoW Forever) hide values like energy, health and cooldowns
+/// from addons, but StatusBars and Cooldown frames can still display them.
+/// The panel position is fixed in UI units (TRACKER_* in Addons/DataToColor/DataToColor.lua),
+/// and the data strip tells how many pixels one UI unit is.
 /// </summary>
 public static class SecretBars
 {
-    /// <summary>Extra physical pixels captured to the right of the last data cell.</summary>
-    public const int CaptureExtraWidth = 1600;
+    // Must match TRACKER_* in DataToColor.lua (UI units from the top left of UIParent)
+    public const float TrackerX = 700;
+    public const float TrackerY = 12;
+    public const float TrackerWidth = 196;
+    public const float TrackerHeight = 68;
 
-    public const int BarCount = 5;
+    public const float CooldownX = 10;
+    public const float CooldownY = 50;
+    public const float CooldownSize = 12;
+    public const float CooldownGap = 3;
+    public const int CooldownCount = 12;
 
-    /// <summary>Bars shorter than this are noise, not a bar.</summary>
-    public const int MinBarPixels = 16;
+    /// <summary>Data strip cell pitch in UI units (CELL_SIZE + CELL_SPACING).</summary>
+    public const float CellPitch = 2;
 
-    /// <summary>Allowed difference in length between bars (all bars have the same width).</summary>
-    public const int BarLengthTolerance = 4;
+    /// <summary>Reported remaining cooldown (ms) while a cooldown sweep is visible.</summary>
+    public const int SweepCooldownMs = 1000;
 
-    /// <summary>Largest gap between the strip and the first bar, and between bars.</summary>
-    public const int MaxGapPixels = 24;
+    /// <summary>Minimum share of bar pixels that must look like a bar.</summary>
+    private const float MinBarCoverage = 0.7f;
 
-    private const int Bright = 150;
-    private const int Dim = 90;
-    private const int Dark = 60;
+    private const int FillMin = 110;
+    private const int EmptyMax = 60;
 
-    // (max cell, current cell) per bar
+    /// <summary>Grey outline around each bar (TRACKER_BAR_BORDER), 0.35 grey = 89.</summary>
+    public const float BarBorder = 2;
+    private const int BorderMin = 70;
+    private const int BorderMax = 105;
+
     public const int PowerMaxCell = 12;
     public const int PowerCell = 13;
     public const int ManaMaxCell = 14;
@@ -47,118 +56,187 @@ public static class SecretBars
     public const int PetHealthMaxCell = 38;
     public const int PetHealthCell = 39;
 
-    private static readonly (int Max, int Current)[] cells =
+    private readonly record struct BarDef(float X, float Y, float W, float H,
+        int MaxCell, int Cell, bool AlwaysUseBar);
+
+    // x, y, w, h inside the panel. Values that are visible arrive exact in the cell;
+    // a hidden value arrives as 0, so the bar is used then. Target health keeps
+    // sending the last visible value, so its bar is always used.
+    private static readonly BarDef[] bars =
     [
-        (PowerMaxCell, PowerCell),
-        (ManaMaxCell, ManaCell),
-        (PlayerHealthMaxCell, PlayerHealthCell),
-        (TargetHealthMaxCell, TargetHealthCell),
-        (PetHealthMaxCell, PetHealthCell),
+        new(8, 8, 180, 8, PowerMaxCell, PowerCell, false),
+        new(8, 29, 88, 6, PlayerHealthMaxCell, PlayerHealthCell, false),
+        new(102, 29, 86, 6, TargetHealthMaxCell, TargetHealthCell, true),
+        new(8, 41, 88, 4, ManaMaxCell, ManaCell, false),
+        new(102, 41, 86, 4, PetHealthMaxCell, PetHealthCell, false),
     ];
 
-    private enum Kind : byte { Black, Fill, Empty, Inactive, Edge, Other }
+    private static readonly bool[] cooldownActive = new bool[CooldownCount];
 
-    private struct Bar
+    /// <summary>True when the tracker panel was found on the last frame.</summary>
+    public static bool Detected { get; private set; }
+
+    /// <summary>
+    /// Remaining cooldown estimate for a main action bar button, from the
+    /// tracker's cooldown sweep. 0 when ready or unknown.
+    /// </summary>
+    public static int CooldownMs(int slotIndex)
     {
-        public int Fill2;
-        public int Empty2;
-        public int Inactive;
-        public int Length;
+        // main bar 1-12, and the stance/stealth pages that replace it (73+)
+        if (!Detected || (slotIndex >= CooldownCount && slotIndex < 72))
+            return 0;
+
+        return cooldownActive[slotIndex % CooldownCount] ? SweepCooldownMs : 0;
     }
 
-    public static int CaptureWidth(int stripWidth, int screenWidth)
+    private readonly record struct Geometry(float OriginX, float OriginY, float Scale)
     {
-        return Math.Max(stripWidth, Math.Min(stripWidth + CaptureExtraWidth, screenWidth));
+        public int X(float unit) => (int)MathF.Round(OriginX + unit * Scale);
+        public int Y(float unit) => (int)MathF.Round(OriginY + unit * Scale);
+    }
+
+    private static bool TryGeometry(ReadOnlySpan<DataFrame> frames, out Geometry geometry)
+    {
+        geometry = default;
+        if (frames.Length < 2)
+            return false;
+
+        DataFrame first = frames[0];
+        DataFrame last = frames[^1];
+        float scale = (last.X - first.X) / ((last.Index - first.Index) * CellPitch);
+        if (scale <= 0)
+            return false;
+
+        // frame positions are cell centers; cell 0 starts at UI (0, 0)
+        geometry = new(first.X - scale / 2f, first.Y - scale / 2f, scale);
+        return true;
+    }
+
+    /// <summary>Capture area needed for the strip plus the tracker panel.</summary>
+    public static Size CaptureSize(ReadOnlySpan<DataFrame> frames, Size strip, int screenWidth, int screenHeight)
+    {
+        if (!TryGeometry(frames, out Geometry g))
+            return strip;
+
+        int width = Math.Max(strip.Width, g.X(TrackerX + TrackerWidth) + 3);
+        int height = Math.Max(strip.Height, g.Y(TrackerY + TrackerHeight) + 3);
+        return new(Math.Min(width, screenWidth), Math.Min(height, screenHeight));
     }
 
     [SkipLocalsInit]
     public static void Apply(Image<Bgra32> image, ReadOnlySpan<DataFrame> frames, Span<int> output)
     {
-        DataFrame last = frames[^1];
-        if (last.Y >= image.Height)
+        Detected = false;
+        if (!TryGeometry(frames, out Geometry g))
             return;
 
-        ReadOnlySpan<Bgra32> row = image.DangerousGetPixelRowMemory(last.Y).Span;
-
-        Span<Bar> bars = stackalloc Bar[BarCount];
-        bars.Clear();
-
-        int x = last.X + 1;
-        // the last data cell itself can be a few pixels wide
-        while (x < row.Length && Classify(row[x]) != Kind.Black)
-            x++;
-
-        for (int i = 0; i < BarCount; i++)
+        Span<float> fractions = stackalloc float[bars.Length];
+        for (int i = 0; i < bars.Length; i++)
         {
-            int gapStart = x;
-            while (x < row.Length && Classify(row[x]) is Kind.Black or Kind.Other)
-            {
-                x++;
-                if (x - gapStart > MaxGapPixels)
-                    return;
-            }
-
-            ref Bar bar = ref bars[i];
-            while (x < row.Length)
-            {
-                Kind kind = Classify(row[x]);
-                if (kind == Kind.Black)
-                    break;
-
-                switch (kind)
-                {
-                    case Kind.Fill: bar.Fill2 += 2; break;
-                    case Kind.Empty: bar.Empty2 += 2; break;
-                    case Kind.Inactive: bar.Inactive++; break;
-                    case Kind.Edge: bar.Fill2++; bar.Empty2++; break;
-                }
-                bar.Length++;
-                x++;
-            }
-
-            // must end inside the captured area on a black gap
-            if (x >= row.Length || bar.Length < MinBarPixels)
-                return;
-
-            if (Math.Abs(bar.Length - bars[0].Length) > BarLengthTolerance)
-                return;
+            BarDef bar = bars[i];
+            if (!TryReadBar(image, g, TrackerX + bar.X, TrackerY + bar.Y, bar.W, bar.H, out fractions[i]))
+                return; // panel not on screen (hidden, setup mode, old addon)
         }
 
-        for (int i = 0; i < BarCount; i++)
+        Detected = true;
+
+        for (int i = 0; i < bars.Length; i++)
         {
-            Bar bar = bars[i];
-            int active = bar.Fill2 + bar.Empty2;
-            if (active <= bar.Inactive * 2)
+            BarDef bar = bars[i];
+            int max = output[bar.MaxCell];
+            if (max <= 0 || (!bar.AlwaysUseBar && output[bar.Cell] != 0))
                 continue;
 
-            (int maxCell, int currentCell) = cells[i];
-            int max = output[maxCell];
-            if (max <= 0)
-                continue;
-
-            output[currentCell] = (int)MathF.Round(max * bar.Fill2 / (float)active);
+            output[bar.Cell] = (int)MathF.Round(max * fractions[i]);
         }
+
+        for (int i = 0; i < CooldownCount; i++)
+        {
+            float x = TrackerX + CooldownX + i * (CooldownSize + CooldownGap);
+            cooldownActive[i] = ReadSweep(image, g, x, TrackerY + CooldownY);
+        }
+    }
+
+    private static bool TryReadBar(Image<Bgra32> image, Geometry g,
+        float x, float y, float w, float h, out float fraction)
+    {
+        fraction = 0;
+
+        int py = g.Y(y + h / 2f);
+        int x0 = g.X(x) + 1;
+        int x1 = g.X(x + w) - 1;
+        if (py < 0 || py >= image.Height || x0 < 0 || x1 >= image.Width || x1 <= x0)
+            return false;
+
+        ReadOnlySpan<Bgra32> row = image.DangerousGetPixelRowMemory(py).Span;
+
+        // the grey outline on both ends tells the panel apart from the game world
+        if (!HasBorder(row, g.X(x - BarBorder), g.X(x)) ||
+            !HasBorder(row, g.X(x + w), g.X(x + w + BarBorder)))
+            return false;
+
+        int fill = 0;
+        int empty = 0;
+        for (int px = x0; px <= x1; px++)
+        {
+            int m = Brightness(row[px]);
+            if (m >= FillMin)
+                fill++;
+            else if (m <= EmptyMax)
+                empty++;
+        }
+
+        int samples = x1 - x0 + 1;
+        if (fill + empty < samples * MinBarCoverage)
+            return false;
+
+        fraction = fill / (float)(fill + empty);
+        return true;
+    }
+
+    /// <summary>
+    /// The sweep covers the remaining part of the cooldown and always touches
+    /// 12 o'clock, so a row through the upper quarter of the square crosses it.
+    /// </summary>
+    private static bool ReadSweep(Image<Bgra32> image, Geometry g, float x, float y)
+    {
+        int py = g.Y(y + CooldownSize / 4f);
+        int x0 = g.X(x) + 1;
+        int x1 = g.X(x + CooldownSize) - 1;
+        if (py < 0 || py >= image.Height || x0 < 0 || x1 >= image.Width)
+            return false;
+
+        ReadOnlySpan<Bgra32> row = image.DangerousGetPixelRowMemory(py).Span;
+        int lit = 0;
+        for (int px = x0; px <= x1; px++)
+        {
+            if (Brightness(row[px]) >= FillMin)
+                lit++;
+        }
+        return lit >= 2;
+    }
+
+    private static bool HasBorder(ReadOnlySpan<Bgra32> row, int from, int to)
+    {
+        if (from < 0 || to >= row.Length)
+            return false;
+
+        for (int px = from; px <= to; px++)
+        {
+            if (IsBorder(row[px]))
+                return true;
+        }
+        return false;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Kind Classify(in Bgra32 p)
+    private static bool IsBorder(in Bgra32 p)
     {
-        if (p.R < Dark && p.G < Dark && p.B < Dark)
-            return Kind.Black;
-
-        if (p.R > Bright && p.G < Dim && p.B < Dim)
-            return Kind.Fill;
-
-        if (p.B > Bright && p.R < Dim && p.G < Dim)
-            return Kind.Empty;
-
-        if (p.G > Bright && p.R < Dim && p.B < Dim)
-            return Kind.Inactive;
-
-        // boundary between filled (red) and empty (blue) blends to purple
-        if (p.R > Dim && p.B > Dim && p.G < Dim)
-            return Kind.Edge;
-
-        return Kind.Other;
+        int m = Brightness(p);
+        return m >= BorderMin && m <= BorderMax &&
+            Math.Abs(p.R - p.G) < 20 && Math.Abs(p.G - p.B) < 20;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int Brightness(in Bgra32 p) => Math.Max(p.R, Math.Max(p.G, p.B));
 }
