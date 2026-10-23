@@ -20,28 +20,31 @@ local GLOBAL_TIME_CELL = NUMBER_OF_FRAMES - 2
 -- cooldowns from addons, but StatusBars and Cooldown frames can still display
 -- them, and the bot measures the panel on screen. Positions are in UI units
 -- from the top left of UIParent. Keep in sync with Core/AddonDataProvider/SecretBars.cs.
-local TRACKER_X = 700
-local TRACKER_Y = 12
-local TRACKER_WIDTH = 196
-local TRACKER_HEIGHT = 68
--- x, y, width, height inside the panel
-local TRACKER_POWER = { 8, 8, 180, 8 }
-local TRACKER_PLAYER_HEALTH = { 8, 29, 88, 6 }
-local TRACKER_TARGET_HEALTH = { 102, 29, 86, 6 }
-local TRACKER_MANA = { 8, 41, 88, 4 }
-local TRACKER_PET_HEALTH = { 102, 41, 86, 4 }
--- grey outline around each bar; the bot checks it to find the panel
-local TRACKER_BAR_BORDER = 2
-local TRACKER_COMBO_Y = 20
-local TRACKER_COMBO_HEIGHT = 5
-local TRACKER_COMBO_WIDTH = 32
-local TRACKER_COMBO_GAP = 5
-local TRACKER_COMBO_COUNT = 5
-local TRACKER_CD_X = 10
-local TRACKER_CD_Y = 50
-local TRACKER_CD_SIZE = 12
-local TRACKER_CD_GAP = 3
-local TRACKER_CD_COUNT = 12
+-- (one table: Lua 5.1 allows only 60 upvalues per function)
+local TRACKER = {
+    X = 700,
+    Y = 12,
+    WIDTH = 196,
+    HEIGHT = 68,
+    -- x, y, width, height inside the panel
+    POWER = { 8, 8, 180, 8 },
+    PLAYER_HEALTH = { 8, 29, 88, 6 },
+    TARGET_HEALTH = { 102, 29, 86, 6 },
+    MANA = { 8, 41, 88, 4 },
+    PET_HEALTH = { 102, 41, 86, 4 },
+    -- grey outline around each bar; the bot checks it to find the panel
+    BAR_BORDER = 2,
+    COMBO_Y = 20,
+    COMBO_HEIGHT = 5,
+    COMBO_WIDTH = 32,
+    COMBO_GAP = 5,
+    COMBO_COUNT = 5,
+    CD_X = 10,
+    CD_Y = 50,
+    CD_SIZE = 12,
+    CD_GAP = 3,
+    CD_COUNT = 12,
+}
 
 -- Dont modify values below
 
@@ -1440,7 +1443,7 @@ function DataToColor:CreateFrames()
         local combo = DataToColor.Visible(GetComboPoints(player, target), 0) or 0
         if combo ~= trackerComboCount then
             trackerComboCount = combo
-            for i = 1, TRACKER_COMBO_COUNT do
+            for i = 1, TRACKER.COMBO_COUNT do
                 if i <= combo then
                     trackerCombo[i]:SetBackdropColor(1, 0.8, 0.1, 1)
                 else
@@ -1509,9 +1512,9 @@ function DataToColor:CreateFrames()
     -- Resource tracker panel
     local WHITE = "Interface\\AddOns\\DataToColor\\white.tga"
     tracker = CreateFrame("Frame", nil, UIParent, BackdropTemplateMixin and "BackdropTemplate")
-    tracker:SetPoint("TOPLEFT", UIParent, "TOPLEFT", TRACKER_X, -TRACKER_Y)
-    tracker:SetWidth(TRACKER_WIDTH)
-    tracker:SetHeight(TRACKER_HEIGHT)
+    tracker:SetPoint("TOPLEFT", UIParent, "TOPLEFT", TRACKER.X, -TRACKER.Y)
+    tracker:SetWidth(TRACKER.WIDTH)
+    tracker:SetHeight(TRACKER.HEIGHT)
     tracker:SetFrameStrata("MEDIUM")
     tracker:SetBackdrop({
         bgFile = WHITE,
@@ -1533,8 +1536,8 @@ function DataToColor:CreateFrames()
     end
 
     local function NewTrackerBar(key, rect, r, g, b)
-        local border = TrackerBox(rect[1] - TRACKER_BAR_BORDER, rect[2] - TRACKER_BAR_BORDER,
-            rect[3] + 2 * TRACKER_BAR_BORDER, rect[4] + 2 * TRACKER_BAR_BORDER)
+        local border = TrackerBox(rect[1] - TRACKER.BAR_BORDER, rect[2] - TRACKER.BAR_BORDER,
+            rect[3] + 2 * TRACKER.BAR_BORDER, rect[4] + 2 * TRACKER.BAR_BORDER)
         border:SetBackdropColor(0.35, 0.35, 0.35, 1)
         local box = TrackerBox(rect[1], rect[2], rect[3], rect[4])
         box:SetFrameLevel(border:GetFrameLevel() + 1)
@@ -1548,21 +1551,21 @@ function DataToColor:CreateFrames()
         trackerBars[key] = bar
     end
 
-    NewTrackerBar("power", TRACKER_POWER, 1, 0.96, 0.41)
-    NewTrackerBar("playerHealth", TRACKER_PLAYER_HEALTH, 0.1, 0.8, 0.1)
-    NewTrackerBar("targetHealth", TRACKER_TARGET_HEALTH, 0.8, 0.15, 0.15)
-    NewTrackerBar("mana", TRACKER_MANA, 0.2, 0.4, 1)
-    NewTrackerBar("petHealth", TRACKER_PET_HEALTH, 0.3, 0.8, 0.3)
+    NewTrackerBar("power", TRACKER.POWER, 1, 0.96, 0.41)
+    NewTrackerBar("playerHealth", TRACKER.PLAYER_HEALTH, 0.1, 0.8, 0.1)
+    NewTrackerBar("targetHealth", TRACKER.TARGET_HEALTH, 0.8, 0.15, 0.15)
+    NewTrackerBar("mana", TRACKER.MANA, 0.2, 0.4, 1)
+    NewTrackerBar("petHealth", TRACKER.PET_HEALTH, 0.3, 0.8, 0.3)
 
-    for i = 1, TRACKER_COMBO_COUNT do
-        local x = TRACKER_POWER[1] + (i - 1) * (TRACKER_COMBO_WIDTH + TRACKER_COMBO_GAP)
-        trackerCombo[i] = TrackerBox(x, TRACKER_COMBO_Y, TRACKER_COMBO_WIDTH, TRACKER_COMBO_HEIGHT)
+    for i = 1, TRACKER.COMBO_COUNT do
+        local x = TRACKER.POWER[1] + (i - 1) * (TRACKER.COMBO_WIDTH + TRACKER.COMBO_GAP)
+        trackerCombo[i] = TrackerBox(x, TRACKER.COMBO_Y, TRACKER.COMBO_WIDTH, TRACKER.COMBO_HEIGHT)
         trackerCombo[i]:SetBackdropColor(0.15, 0.15, 0.15, 1)
     end
 
-    for i = 1, TRACKER_CD_COUNT do
-        local x = TRACKER_CD_X + (i - 1) * (TRACKER_CD_SIZE + TRACKER_CD_GAP)
-        local box = TrackerBox(x, TRACKER_CD_Y, TRACKER_CD_SIZE, TRACKER_CD_SIZE)
+    for i = 1, TRACKER.CD_COUNT do
+        local x = TRACKER.CD_X + (i - 1) * (TRACKER.CD_SIZE + TRACKER.CD_GAP)
+        local box = TrackerBox(x, TRACKER.CD_Y, TRACKER.CD_SIZE, TRACKER.CD_SIZE)
         local cd = CreateFrame("Cooldown", nil, box)
         cd:SetAllPoints(box)
         if cd.SetSwipeTexture then cd:SetSwipeTexture(WHITE) end
