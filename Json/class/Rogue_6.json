@@ -1,0 +1,97 @@
+{
+  "Log": false,
+  "ClassName": "Rogue",
+  "PathFilename": "5_Gnome.json", // Dun Morogh, around Kharanos (level 5-10)
+  "KeyboardOnly": true,
+  /*
+    Action bar 1 (same slots as Rogue_10 / Rogue_12):
+      2  Sinister Strike
+      3  Eviscerate
+      4  (Slice and Dice, level 10)
+      5  (Evasion, level 8)
+      6  Throw (needs a thrown weapon in the ranged slot)
+      -  Food
+
+    WoW Forever has no combat log, so the swing timer checks
+    (LastMainHandMs) from the later profiles are left out.
+  */
+  "Wait": {
+    "Sequence": [
+      {
+        "Cost": 0.9,
+        "Name": "User",
+        "Requirement": "MenuOpen || ChatInputVisible"
+      }
+    ]
+  },
+  "Pull": {
+    "Sequence": [
+      {
+        "Name": "Throw",
+        "Key": "6",
+        "Item": true,
+        "WhenUsable": true,
+        "BeforeCastStop": true,
+        "AfterCastWaitMeleeRange": true,
+        "Requirements": [
+          "AddVisible",
+          "HasRangedWeapon && !Items Broken",
+          "!InMeleeRange && (SpellInRange:1)"
+        ]
+      }
+    ]
+  },
+  "Combat": {
+    "Sequence": [
+      {
+        "Name": "Eviscerate",
+        "Key": "3",
+        "Requirement": "Combo Point > 2 || (Combo Point > 0 && TargetHealth% < 25)"
+      },
+      {
+        "Name": "Sinister Strike",
+        "Key": "2"
+      },
+      {
+        "Name": "AutoAttack",
+        "Requirements": [
+          "InMeleeRange",
+          "!Charge Stun"
+        ]
+      },
+      {
+        "Name": "Approach",
+        "Requirements": [
+          "!MeleeSwinging && !SoftTargetDead"
+        ],
+        "Log": false
+      }
+    ]
+  },
+  "Adhoc": {
+    "Sequence": [
+      {
+        "Name": "Food",
+        "Key": "-",
+        "Requirement": "Health% < 30"
+      }
+    ]
+  },
+  "NPC": {
+    "Sequence": [
+      {
+        "Cost": 6,
+        "Name": "Repair",
+        "Requirement": "Durability% < 35"
+      },
+      {
+        "Cost": 6,
+        "Name": "Sell",
+        "Requirements": [
+          "BagFull",
+          "BagGreyItem"
+        ]
+      }
+    ]
+  }
+}
