@@ -7,9 +7,18 @@ public sealed class CombatLog : IReader
 {
     private const int PLAYER_DEATH_EVENT = 16777215;
 
+    /// <summary>Target GUID cell (see PlayerReader.TargetGuid).</summary>
+    public const int TargetGuidCell = 57;
+
     private readonly AddonBits bits;
 
     private bool wasInCombat;
+
+    // Clients without a combat log (WoW Forever): the addon can miss a death
+    // when the target is cleared right away, so also credit a kill when the
+    // target we fought while it was alive shows up dead.
+    private int fightingTargetGuid;
+    private readonly HashSet<int> credited = [];
 
     public event Action? KillCredit;
     public event Action? PlayerDeath;
@@ -55,6 +64,8 @@ public sealed class CombatLog : IReader
     public void Reset()
     {
         wasInCombat = false;
+        fightingTargetGuid = 0;
+        credited.Clear();
 
         DamageDone.Clear();
         DamageTaken.Clear();
@@ -120,9 +131,29 @@ public sealed class CombatLog : IReader
             {
                 PlayerDeath?.Invoke();
             }
-            else
+            else if (credited.Add(deadGuid))
             {
                 KillCredit?.Invoke();
+            }
+        }
+
+        int targetGuid = reader.GetInt(TargetGuidCell);
+        if (targetGuid > 0)
+        {
+            if (combat && bits.Target_NotDead())
+            {
+                fightingTargetGuid = targetGuid;
+            }
+            else if (bits.Target_Dead() && targetGuid == fightingTargetGuid)
+            {
+                fightingTargetGuid = 0;
+                if (credited.Add(targetGuid))
+                {
+                    DamageDone.Remove(targetGuid);
+                    DamageTaken.Remove(targetGuid);
+                    ToPull.Remove(targetGuid);
+                    KillCredit?.Invoke();
+                }
             }
         }
 
@@ -134,6 +165,10 @@ public sealed class CombatLog : IReader
             EnemySummons.Clear();
             ToPull.Clear();
         }
+
+        // keep the duplicate guard small; GUIDs are only needed for a short while
+        if (credited.Count > 64)
+            credited.Clear();
 
         wasInCombat = combat;
     }

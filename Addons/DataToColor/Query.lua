@@ -426,9 +426,16 @@ function DataToColor:populateActionbarCost(slot)
             for order, costInfo in ipairs(costTable) do
                 -- cost negative means it produces that type of powertype...
                 if costInfo.cost > 0 then
-                    local meta = 100000 * slot + 10000 * order + ClassicPowerType(costInfo.type) + offsetEnumPowerType
-                    --print(slot, actionType, order, costInfo.type, costInfo.cost, GetSpellLink(id), meta)
-                    DataToColor.actionBarCostQueue:set(meta, costInfo.cost)
+                    local powerType = ClassicPowerType(costInfo.type)
+                    local cost = costInfo.cost
+                    -- Modern clients list finishers (Eviscerate) with the max cost of
+                    -- 5 combo points; they can be used from 1, so send the minimum.
+                    if powerType == CLASSIC_COMBO_POINTS and costInfo.minCost and costInfo.minCost > 0 then
+                        cost = costInfo.minCost
+                    end
+                    local meta = 100000 * slot + 10000 * order + powerType + offsetEnumPowerType
+                    --print(slot, actionType, order, costInfo.type, cost, GetSpellLink(id), meta)
+                    DataToColor.actionBarCostQueue:set(meta, cost)
                     found = true
                 end
             end
