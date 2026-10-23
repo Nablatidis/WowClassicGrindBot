@@ -416,8 +416,12 @@ function DataToColor:populateActionbarCost(slot)
 
     local found = false
 
-    if id and actionType == DataToColor.C.ActionType.Spell or actionType == DataToColor.C.ActionType.Macro then
-        local costTable = GetSpellPowerCost(id)
+    -- Brackets matter: a macro that casts no spell has id == nil, and
+    -- GetSpellPowerCost(nil) errors, which aborted the whole flush (and with it
+    -- the key binding queue). pcall guards against other invalid ids too.
+    if id and (actionType == DataToColor.C.ActionType.Spell or actionType == DataToColor.C.ActionType.Macro) then
+        local ok, costTable = pcall(GetSpellPowerCost, id)
+        if not ok then costTable = nil end
         if costTable then
             for order, costInfo in ipairs(costTable) do
                 -- cost negative means it produces that type of powertype...
